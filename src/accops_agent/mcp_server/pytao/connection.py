@@ -1,4 +1,4 @@
-"""Tao connection management."""
+"""Tao connection management for the MCP server process."""
 
 import logging
 from pathlib import Path
@@ -14,13 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class TaoConnection:
-    """Manages Tao instance lifecycle and connection state.
-
-    Attributes:
-        tao: The Tao instance
-        init_file: Path to Tao initialization file
-        _connected: Connection status
-    """
+    """Manages Tao instance lifecycle and connection state."""
 
     def __init__(self, init_file: Optional[str] = None):
         """Initialize Tao connection manager.
@@ -38,11 +32,7 @@ class TaoConnection:
         self._connected = False
 
     def connect(self) -> bool:
-        """Establish connection to Tao.
-
-        Returns:
-            True if connection successful, False otherwise
-        """
+        """Establish connection to Tao."""
         try:
             if self.init_file:
                 # Verify init file exists
@@ -69,11 +59,7 @@ class TaoConnection:
             return False
 
     def disconnect(self) -> bool:
-        """Close Tao connection.
-
-        Returns:
-            True if disconnection successful, False otherwise
-        """
+        """Close Tao connection."""
         try:
             if self.tao is not None:
                 # Tao cleanup (if needed)
@@ -87,25 +73,11 @@ class TaoConnection:
             return False
 
     def is_connected(self) -> bool:
-        """Check if connection is active.
-
-        Returns:
-            True if connected, False otherwise
-        """
+        """Check if connection is active."""
         return self._connected and self.tao is not None
 
     def execute_command(self, command: str) -> str:
-        """Execute a Tao command.
-
-        Args:
-            command: Tao command string
-
-        Returns:
-            Command output as string
-
-        Raises:
-            RuntimeError: If not connected or command execution fails
-        """
+        """Execute a Tao command."""
         if not self.is_connected():
             raise RuntimeError("Not connected to Tao")
 

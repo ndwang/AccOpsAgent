@@ -50,9 +50,8 @@ class AgentState(TypedDict, total=False):
     Fields are optional (total=False) to allow incremental state building.
 
     Attributes:
-        # User input and configuration
+        # User input
         user_intent: User's goal or request
-        backend_type: Type of backend ('mock', 'pytao', etc.)
 
         # Current machine state
         current_diagnostics: Latest diagnostic readings
@@ -93,9 +92,8 @@ class AgentState(TypedDict, total=False):
         metadata: Additional metadata for tracking
     """
 
-    # User input and configuration
+    # User input
     user_intent: str
-    backend_type: str
 
     # Current machine state
     current_diagnostics: List[DiagnosticSnapshot]
@@ -139,19 +137,17 @@ class AgentState(TypedDict, total=False):
     metadata: Dict[str, Any]
 
 
-def create_initial_state(user_intent: str, backend_type: str = "mock") -> AgentState:
+def create_initial_state(user_intent: str) -> AgentState:
     """Create initial agent state.
 
     Args:
         user_intent: User's goal or request
-        backend_type: Type of backend to use
 
     Returns:
         Initial AgentState
     """
     return AgentState(
         user_intent=user_intent,
-        backend_type=backend_type,
         current_diagnostics=[],
         current_parameters={},
         machine_status_summary="",

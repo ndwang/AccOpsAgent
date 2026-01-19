@@ -1,4 +1,8 @@
-"""Tao backend implementation for AcceleratorBackend interface."""
+"""Tao backend implementation for AcceleratorBackend interface.
+
+This lives inside the MCP server process and is not used directly by the agent;
+the agent talks to Tao via MCP tools exposed by the server.
+"""
 
 import logging
 from datetime import datetime
@@ -29,11 +33,8 @@ class TaoBackend(AcceleratorBackend):
     """Concrete implementation of AcceleratorBackend using PyTao.
 
     This backend connects to Bmad/Tao simulations to read diagnostics
-    and control parameters.
-
-    Attributes:
-        connection: TaoConnection instance
-        parser: TaoDataParser for parsing Tao outputs
+    and control parameters. It is designed to run inside the MCP server
+    process and should not be imported directly by agent code.
     """
 
     def __init__(self, config: AcceleratorConfig):
@@ -107,7 +108,6 @@ class TaoBackend(AcceleratorBackend):
 
         try:
             # Map diagnostic to Tao element and attribute
-            # This is a simplified mapping - real implementation needs config
             value = self._read_tao_diagnostic(diagnostic_name, diag_def)
 
             # Determine status
@@ -210,7 +210,6 @@ class TaoBackend(AcceleratorBackend):
 
         if not self.is_connected():
             raise RuntimeError("Cannot read parameter: not connected to Tao")
-
         try:
             # Map parameter to Tao element and attribute
             value = self._read_tao_parameter(parameter_name, knob)
@@ -254,8 +253,7 @@ class TaoBackend(AcceleratorBackend):
             # Generic attribute
             attribute = "value"
 
-        # Extract element name from parameter name
-        # e.g., QF1_K1 -> QF1
+        # Extract element name from parameter name (e.g., QF1_K1 -> QF1)
         element = parameter_name.split("_")[0]
 
         # Execute Tao command

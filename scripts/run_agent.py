@@ -2,12 +2,11 @@
 """CLI entry point for the AccOps Agent.
 
 This script provides a human-in-the-loop interface for running
-the accelerator optimization agent.
+the accelerator optimization agent using the MCP backend.
 
 Usage:
     uv run python scripts/run_agent.py \\
         --config configs/accelerators/example_linac.yaml \\
-        --backend mock \\
         --intent "Optimize horizontal beam size"
 """
 
@@ -36,8 +35,7 @@ from accops_agent.cli import (
     print_warning,
 )
 from accops_agent.cli.input_handler import ApprovalStatus
-from accops_agent.config import load_accelerator_config
-from accops_agent.diagnostic_control import MockBackend
+from accops_agent.diagnostic_control import MCPBackend
 from accops_agent.graph import (
     HUMAN_APPROVAL,
     build_graph,
@@ -61,40 +59,6 @@ def setup_logging(log_level: str) -> None:
             logging.StreamHandler(sys.stderr),
         ],
     )
-
-
-def create_backend(backend_type: str, config):
-    """Create backend instance based on type.
-
-    Args:
-        backend_type: Type of backend ('mock' or 'pytao')
-        config: Accelerator configuration
-
-    Returns:
-        Backend instance
-
-    Raises:
-        ValueError: If backend type is unknown
-    """
-    if backend_type == "mock":
-        backend = MockBackend(config)
-        backend.initialize()
-        return backend
-    elif backend_type == "pytao":
-        # Import only if needed (requires pytao installation)
-        try:
-            from accops_agent.backends.pytao import TaoBackend
-
-            backend = TaoBackend(config)
-            backend.initialize()
-            return backend
-        except ImportError:
-            raise ValueError(
-                "pytao backend requires python-pytao. "
-                "Install with: uv add pytao"
-            )
-    else:
-        raise ValueError(f"Unknown backend type: {backend_type}")
 
 
 def run_agent_loop(
@@ -263,20 +227,14 @@ def handle_approval_loop(compiled_graph, state: dict, config: dict) -> dict:
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Run the AccOps Agent for accelerator optimization.",
+        description="Run the AccOps Agent for accelerator optimization via MCP.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Run with mock backend (for testing)
+    # Run with accelerator configuration
     uv run python scripts/run_agent.py \\
         --config configs/accelerators/example_linac.yaml \\
-        --backend mock \\
         --intent "Minimize horizontal beam size"
-
-    # Run with PyTao backend (requires Tao installation)
-    uv run python scripts/run_agent.py \\
-        --config configs/accelerators/my_accelerator.yaml \\
-        --backend pytao
 
     # Interactive mode (prompts for intent)
     uv run python scripts/run_agent.py \\
@@ -290,15 +248,6 @@ Examples:
         type=str,
         required=True,
         help="Path to accelerator configuration YAML file",
-    )
-
-    parser.add_argument(
-        "--backend",
-        "-b",
-        type=str,
-        default="mock",
-        choices=["mock", "pytao"],
-        help="Backend type to use (default: mock)",
     )
 
     parser.add_argument(
@@ -355,22 +304,15 @@ Examples:
     # Print banner
     print_banner()
 
-    # Load configuration
+    # Create MCP backend (config is loaded via MCP server)
     try:
-        print_info(f"Loading configuration from {args.config}...")
-        accel_config = load_accelerator_config(args.config)
-        print_success(f"Loaded config: {accel_config.name}")
-        print_info(f"  Knobs: {len(accel_config.knobs)}")
-        print_info(f"  Diagnostics: {len(accel_config.diagnostics)}")
-    except Exception as e:
-        print_error(f"Failed to load configuration: {e}")
-        sys.exit(1)
-
-    # Create backend
-    try:
-        print_info(f"Initializing {args.backend} backend...")
-        backend = create_backend(args.backend, accel_config)
-        print_success("Backend initialized")
+        print_info(f"Initializing MCP backend with config: {args.config}...")
+        backend = MCPBackend(config_path=args.config)
+        if not backend.initialize():
+            raise RuntimeError("Failed to initialize MCP backend")
+        print_success(f"Connected to MCP server: {backend.config.name}")
+        print_info(f"  Knobs: {len(backend.config.knobs)}")
+        print_info(f"  Diagnostics: {len(backend.config.diagnostics)}")
     except Exception as e:
         print_error(f"Failed to create backend: {e}")
         sys.exit(1)
@@ -416,10 +358,7 @@ Examples:
         sys.exit(1)
 
     # Create initial state
-    initial_state = create_initial_state(
-        user_intent=user_intent,
-        backend_type=args.backend,
-    )
+    initial_state = create_initial_state(user_intent=user_intent)
     initial_state["max_iterations"] = args.max_iterations
 
     # Create graph config

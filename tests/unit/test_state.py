@@ -92,7 +92,6 @@ class TestAgentState:
         """Test creating complete AgentState with all fields."""
         state: AgentState = {
             "user_intent": "Optimize beam size",
-            "backend_type": "mock",
             "current_diagnostics": [],
             "current_parameters": {},
             "machine_status_summary": "NORMAL",
@@ -117,7 +116,6 @@ class TestAgentState:
         }
 
         assert state["user_intent"] == "Optimize beam size"
-        assert state["backend_type"] == "mock"
         assert state["iteration_count"] == 0
         assert state["max_iterations"] == 10
 
@@ -168,7 +166,6 @@ class TestCreateInitialState:
         state = create_initial_state("Optimize beam size")
 
         assert state["user_intent"] == "Optimize beam size"
-        assert state["backend_type"] == "mock"
         assert state["current_diagnostics"] == []
         assert state["current_parameters"] == {}
         assert state["iteration_count"] == 0
@@ -176,20 +173,12 @@ class TestCreateInitialState:
         assert not state["awaiting_approval"]
         assert not state["goal_achieved"]
 
-    def test_create_initial_state_with_backend_type(self):
-        """Test creating initial state with custom backend type."""
-        state = create_initial_state("Test intent", backend_type="pytao")
-
-        assert state["user_intent"] == "Test intent"
-        assert state["backend_type"] == "pytao"
-
     def test_initial_state_has_all_required_fields(self):
         """Test that initial state has all necessary fields."""
         state = create_initial_state("Test")
 
         # Check key fields are present
         assert "user_intent" in state
-        assert "backend_type" in state
         assert "current_diagnostics" in state
         assert "current_parameters" in state
         assert "proposed_actions" in state

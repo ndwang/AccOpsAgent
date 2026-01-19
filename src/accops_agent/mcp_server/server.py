@@ -24,13 +24,13 @@ from mcp.types import (
 )
 from pydantic import AnyUrl
 
-from ..backends.pytao import TaoBackend
+from .pytao import TaoBackend
 from ..config.schema import AcceleratorConfig
 
 logger = logging.getLogger(__name__)
 
 
-class TaoMCPServer:
+class PyTaoMCPServer:
     """MCP server wrapping PyTao backend functionality.
 
     This server exposes tools for:
@@ -596,13 +596,13 @@ class TaoMCPServer:
             await self.server.run(read_stream, write_stream, self.server.create_initialization_options())
 
 
-def create_server() -> TaoMCPServer:
-    """Create a new TaoMCPServer instance.
+def create_server() -> PyTaoMCPServer:
+    """Create a new PyTaoMCPServer instance.
 
     Returns:
-        Configured TaoMCPServer
+        Configured PyTaoMCPServer
     """
-    return TaoMCPServer()
+    return PyTaoMCPServer()
 
 
 def main() -> None:

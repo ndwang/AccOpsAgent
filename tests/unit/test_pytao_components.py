@@ -1,9 +1,12 @@
-"""Unit tests for PyTao components (parser, commands) without requiring Tao."""
+"""Unit tests for PyTao components (parser, commands) without requiring Tao.
+
+These tests target the PyTao backend internals used by the MCP server.
+"""
 
 import pytest
 
-from accops_agent.backends.pytao.parser import TaoDataParser
-from accops_agent.backends.pytao.commands import (
+from accops_agent.mcp_server.pytao.parser import TaoDataParser
+from accops_agent.mcp_server.pytao.commands import (
     build_read_data_command,
     build_set_parameter_command,
     build_get_parameter_command,
@@ -273,13 +276,13 @@ class TestTaoConnectionInterface:
 
     def test_import_tao_connection(self):
         """Test that TaoConnection can be imported."""
-        from accops_agent.backends.pytao.connection import TaoConnection
+        from accops_agent.mcp_server.pytao.connection import TaoConnection
 
         assert TaoConnection is not None
 
     def test_tao_connection_initialization_without_init_file(self):
         """Test TaoConnection initialization."""
-        from accops_agent.backends.pytao.connection import TaoConnection
+        from accops_agent.mcp_server.pytao.connection import TaoConnection
 
         # TaoConnection raises ImportError if pytao not available
         try:
@@ -292,7 +295,7 @@ class TestTaoConnectionInterface:
 
     def test_tao_connection_initialization_with_init_file(self):
         """Test TaoConnection initialization with init file."""
-        from accops_agent.backends.pytao.connection import TaoConnection
+        from accops_agent.mcp_server.pytao.connection import TaoConnection
 
         # TaoConnection raises ImportError if pytao not available
         try:
@@ -310,13 +313,13 @@ class TestTaoBackendInterface:
 
     def test_import_tao_backend(self):
         """Test that TaoBackend can be imported."""
-        from accops_agent.backends.pytao import TaoBackend
+        from accops_agent.mcp_server.pytao import TaoBackend
 
         assert TaoBackend is not None
 
     def test_tao_backend_has_required_methods(self):
         """Test TaoBackend has all required interface methods."""
-        from accops_agent.backends.pytao import TaoBackend
+        from accops_agent.mcp_server.pytao import TaoBackend
 
         required_methods = [
             "initialize",

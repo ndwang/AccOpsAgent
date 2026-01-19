@@ -15,8 +15,8 @@ from accops_agent.diagnostic_control import (
 
 # Try to import TaoBackend - skip tests if not available
 try:
-    from accops_agent.backends.pytao import TaoBackend
-    from accops_agent.backends.pytao.connection import TaoConnection
+    from accops_agent.mcp_server.pytao import TaoBackend
+    from accops_agent.mcp_server.pytao.connection import TaoConnection
     from pytao import Tao
 
     TAO_AVAILABLE = True
@@ -144,7 +144,7 @@ class TestTaoDataParser:
 
     def test_parse_lat_ele_list_empty(self):
         """Test parsing empty output."""
-        from accops_agent.backends.pytao.parser import TaoDataParser
+        from accops_agent.mcp_server.pytao.parser import TaoDataParser
 
         parser = TaoDataParser()
         result = parser.parse_lat_ele_list("")
@@ -152,7 +152,7 @@ class TestTaoDataParser:
 
     def test_parse_lat_ele_list_simple(self):
         """Test parsing simple lat_ele_list output."""
-        from accops_agent.backends.pytao.parser import TaoDataParser
+        from accops_agent.mcp_server.pytao.parser import TaoDataParser
 
         parser = TaoDataParser()
         output = "ele_name;k1;s\nQF1;2.5;10.0\nQD1;-2.0;20.0"
@@ -167,7 +167,7 @@ class TestTaoDataParser:
 
     def test_parse_single_value_direct(self):
         """Test parsing single numeric value."""
-        from accops_agent.backends.pytao.parser import TaoDataParser
+        from accops_agent.mcp_server.pytao.parser import TaoDataParser
 
         parser = TaoDataParser()
 
@@ -181,7 +181,7 @@ class TestTaoDataParser:
 
     def test_parse_single_value_from_formatted(self):
         """Test parsing single value from formatted output."""
-        from accops_agent.backends.pytao.parser import TaoDataParser
+        from accops_agent.mcp_server.pytao.parser import TaoDataParser
 
         parser = TaoDataParser()
         output = "ele_name;k1\nQF1;2.5"
@@ -190,7 +190,7 @@ class TestTaoDataParser:
 
     def test_convert_value_types(self):
         """Test value type conversion."""
-        from accops_agent.backends.pytao.parser import TaoDataParser
+        from accops_agent.mcp_server.pytao.parser import TaoDataParser
 
         parser = TaoDataParser()
 
@@ -216,7 +216,7 @@ class TestTaoCommands:
 
     def test_build_read_data_command(self):
         """Test building read data command."""
-        from accops_agent.backends.pytao.commands import build_read_data_command
+        from accops_agent.mcp_server.pytao.commands import build_read_data_command
 
         cmd = build_read_data_command("QF1", "k1")
         assert "QF1" in cmd
@@ -225,7 +225,7 @@ class TestTaoCommands:
 
     def test_build_set_parameter_command(self):
         """Test building set parameter command."""
-        from accops_agent.backends.pytao.commands import build_set_parameter_command
+        from accops_agent.mcp_server.pytao.commands import build_set_parameter_command
 
         cmd = build_set_parameter_command("QF1", "k1", 2.5)
         assert "QF1" in cmd
@@ -235,7 +235,7 @@ class TestTaoCommands:
 
     def test_build_get_parameter_command(self):
         """Test building get parameter command."""
-        from accops_agent.backends.pytao.commands import build_get_parameter_command
+        from accops_agent.mcp_server.pytao.commands import build_get_parameter_command
 
         cmd = build_get_parameter_command("QF1", "k1")
         assert "QF1" in cmd
@@ -243,7 +243,7 @@ class TestTaoCommands:
 
     def test_build_run_calculation_command(self):
         """Test building calculation command."""
-        from accops_agent.backends.pytao.commands import build_run_calculation_command
+        from accops_agent.mcp_server.pytao.commands import build_run_calculation_command
 
         cmd = build_run_calculation_command()
         assert "track_type" in cmd or "set global" in cmd

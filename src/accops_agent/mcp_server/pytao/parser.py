@@ -15,18 +15,7 @@ class TaoDataParser:
 
     @staticmethod
     def parse_lat_ele_list(output: str) -> List[Dict[str, Any]]:
-        """Parse output from python lat_ele_list command.
-
-        The output format is typically:
-        ele_name;attribute1;attribute2;...
-        value1;value2;...
-
-        Args:
-            output: Raw output from Tao command
-
-        Returns:
-            List of dictionaries with parsed data
-        """
+        """Parse output from python lat_ele_list command."""
         if not output or output.strip() == "":
             return []
 
@@ -65,15 +54,7 @@ class TaoDataParser:
 
     @staticmethod
     def parse_single_value(output: str, attribute: str) -> Optional[float]:
-        """Parse a single numeric value from Tao output.
-
-        Args:
-            output: Raw output from Tao command
-            attribute: Name of the attribute being parsed
-
-        Returns:
-            Parsed float value or None if parsing fails
-        """
+        """Parse a single numeric value from Tao output."""
         try:
             # Try direct conversion first
             return float(output.strip())
@@ -101,14 +82,7 @@ class TaoDataParser:
 
     @staticmethod
     def parse_orbit_data(output: str) -> Dict[str, Dict[str, float]]:
-        """Parse orbit data from Tao output.
-
-        Args:
-            output: Raw output from orbit command
-
-        Returns:
-            Dictionary mapping element names to {x, y} orbit values
-        """
+        """Parse orbit data from Tao output."""
         results = TaoDataParser.parse_lat_ele_list(output)
         orbit_data = {}
 
@@ -124,14 +98,7 @@ class TaoDataParser:
 
     @staticmethod
     def parse_beam_size_data(output: str) -> Dict[str, float]:
-        """Parse beam size data from Tao output.
-
-        Args:
-            output: Raw output from beam size command
-
-        Returns:
-            Dictionary with sig_x and sig_y values
-        """
+        """Parse beam size data from Tao output."""
         results = TaoDataParser.parse_lat_ele_list(output)
         if results and len(results) > 0:
             return {
@@ -142,14 +109,7 @@ class TaoDataParser:
 
     @staticmethod
     def _convert_value(value_str: str) -> Any:
-        """Convert string value to appropriate Python type.
-
-        Args:
-            value_str: String value to convert
-
-        Returns:
-            Converted value (float, int, str, or bool)
-        """
+        """Convert string value to appropriate Python type."""
         # Try boolean
         if value_str.lower() in ("true", "t", "yes", "y"):
             return True

@@ -5,12 +5,12 @@ from pathlib import Path
 
 from accops_agent.config import load_accelerator_config
 from accops_agent.diagnostic_control import (
-    MockBackend,
     DiagnosticSnapshot,
     DiagnosticStatus,
     ParameterValue,
     ActionResult,
 )
+from accops_agent.diagnostic_control.mock_backend import MockBackend
 
 
 @pytest.fixture

@@ -5,7 +5,8 @@ from pathlib import Path
 from unittest.mock import Mock, MagicMock
 
 from accops_agent.config import load_accelerator_config
-from accops_agent.diagnostic_control import MockBackend, DiagnosticStatus
+from accops_agent.diagnostic_control import DiagnosticStatus
+from accops_agent.diagnostic_control.mock_backend import MockBackend
 from accops_agent.graph.state import create_initial_state, ProposedAction
 from accops_agent.graph.nodes import (
     ingest_diagnostics_node,

@@ -51,8 +51,10 @@ State flows through `AgentState` TypedDict defined in `state.py`. Routing functi
 ### Backend Abstraction (src/accops_agent/diagnostic_control/)
 
 `AcceleratorBackend` is the abstract interface combining `DiagnosticProvider` and `ControlProvider`:
-- **MockBackend** - In-memory simulation for testing
-- **TaoBackend** (src/accops_agent/backends/pytao/) - Connects to Bmad/Tao particle physics simulations
+- **MCPBackend** - Primary production backend that communicates with the PyTao MCP server via Model Context Protocol
+- **MockBackend** - In-memory simulation for testing and development
+
+All accelerator access is via MCP tools. The PyTao backend implementation (`TaoBackend`, `TaoConnection`, etc.) lives in `mcp_server/pytao` and is only used internally by the MCP server process.
 
 Backends read/write via `DiagnosticSnapshot` and `ParameterValue` data models.
 
@@ -101,7 +103,13 @@ Human-in-the-loop interface with colored output, action display, and approval pr
 
 ## MCP Server (src/accops_agent/mcp_server/)
 
-The PyTao MCP server exposes accelerator controls and diagnostics as tools for AI assistants via the Model Context Protocol.
+The PyTao MCP server exposes accelerator controls and diagnostics as tools for AI assistants via the Model Context Protocol. This is the **only** way the agent accesses PyTao accelerators in production.
+
+### Architecture
+
+- **Agent side**: Uses `MCPBackend` from `diagnostic_control.mcp_backend`, which spawns the MCP server as a subprocess and communicates via stdio
+- **Server side**: `PyTaoMCPServer` wraps `TaoBackend` (from `mcp_server.pytao`) and exposes its capabilities as MCP tools
+- **PyTao internals**: All Tao-specific code (connection management, command building, parsing) lives in `mcp_server/pytao` and is not imported directly by agent code
 
 ### Running the MCP Server
 
