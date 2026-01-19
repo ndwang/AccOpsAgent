@@ -48,7 +48,7 @@ The agent uses a StateGraph with these nodes executed in sequence:
 
 State flows through `AgentState` TypedDict defined in `state.py`. Routing functions in `builder.py` handle conditional edges.
 
-### Backend Abstraction (src/accops_agent/diagnostic_control/)
+### Backend Abstraction (src/accops_agent/accelerator_interface/)
 
 `AcceleratorBackend` is the abstract interface combining `DiagnosticProvider` and `ControlProvider`:
 - **MCPBackend** - Primary production backend that communicates with the PyTao MCP server via Model Context Protocol
@@ -107,7 +107,7 @@ The PyTao MCP server exposes accelerator controls and diagnostics as tools for A
 
 ### Architecture
 
-- **Agent side**: Uses `MCPBackend` from `diagnostic_control.mcp_backend`, which spawns the MCP server as a subprocess and communicates via stdio
+- **Agent side**: Uses `MCPBackend` from `accelerator_interface.mcp_backend`, which spawns the MCP server as a subprocess and communicates via stdio
 - **Server side**: `PyTaoMCPServer` wraps `TaoBackend` (from `mcp_server.pytao`) and exposes its capabilities as MCP tools
 - **PyTao internals**: All Tao-specific code (connection management, command building, parsing) lives in `mcp_server/pytao` and is not imported directly by agent code
 

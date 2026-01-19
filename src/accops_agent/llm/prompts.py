@@ -6,7 +6,7 @@ from typing import Dict, List
 
 import yaml
 
-from ..diagnostic_control import DiagnosticSnapshot
+from ..accelerator_interface import DiagnosticSnapshot
 
 logger = logging.getLogger(__name__)
 

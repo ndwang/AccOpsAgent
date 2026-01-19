@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest.mock import Mock, MagicMock
 
 from accops_agent.config import load_accelerator_config
-from accops_agent.diagnostic_control import DiagnosticStatus
-from accops_agent.diagnostic_control.mock_backend import MockBackend
+from accops_agent.accelerator_interface import DiagnosticStatus
+from accops_agent.accelerator_interface.mock_backend import MockBackend
 from accops_agent.graph.state import create_initial_state, ProposedAction
 from accops_agent.graph.nodes import (
     ingest_diagnostics_node,
@@ -427,7 +427,7 @@ class TestVerifyResultsNode:
 
     def test_verify_failed_execution(self):
         """Test verification of failed execution."""
-        from accops_agent.diagnostic_control import ActionResult
+        from accops_agent.accelerator_interface import ActionResult
 
         state = create_initial_state("Test")
         state["current_execution_result"] = ActionResult(
@@ -445,7 +445,7 @@ class TestVerifyResultsNode:
 
     def test_verify_requires_llm_client(self, mock_backend):
         """Test that verification requires LLM client when history exists."""
-        from accops_agent.diagnostic_control import ActionResult
+        from accops_agent.accelerator_interface import ActionResult
 
         state = create_initial_state("Test")
         state["current_execution_result"] = ActionResult(
@@ -478,7 +478,7 @@ class TestVerifyResultsNode:
 
     def test_verify_successful_execution(self, mock_backend, node_config_with_llm, mock_llm_client):
         """Test verification of successful execution."""
-        from accops_agent.diagnostic_control import ActionResult
+        from accops_agent.accelerator_interface import ActionResult
 
         mock_llm_client.generate.return_value = "Assessment: EFFECTIVE\nEffectiveness: 8/10\nRecommendation: CONTINUE"
 

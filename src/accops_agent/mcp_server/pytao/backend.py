@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from ...config.schema import AcceleratorConfig
-from ...diagnostic_control import (
+from ...accelerator_interface import (
     AcceleratorBackend,
     ActionResult,
     DiagnosticSnapshot,

@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from ..diagnostic_control import ActionResult, DiagnosticSnapshot, DiagnosticStatus
+from ..accelerator_interface import ActionResult, DiagnosticSnapshot, DiagnosticStatus
 from ..graph.state import AgentState, ProposedAction
 
 

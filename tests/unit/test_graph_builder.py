@@ -8,7 +8,7 @@ from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from accops_agent.config import load_accelerator_config
-from accops_agent.diagnostic_control.mock_backend import MockBackend
+from accops_agent.accelerator_interface.mock_backend import MockBackend
 from accops_agent.graph import (
     AgentState,
     build_graph,

@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 
 from accops_agent.config import load_accelerator_config
-from accops_agent.diagnostic_control import DiagnosticSnapshot, DiagnosticStatus
+from accops_agent.accelerator_interface import DiagnosticSnapshot, DiagnosticStatus
 from accops_agent.graph.state import ProposedAction
 from accops_agent.safety import (
     ConstraintChecker,

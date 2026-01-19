@@ -3,7 +3,7 @@
 import pytest
 
 from accops_agent.graph.state import AgentState, ProposedAction, ExecutionHistoryEntry, create_initial_state
-from accops_agent.diagnostic_control import DiagnosticSnapshot, DiagnosticStatus, ActionResult
+from accops_agent.accelerator_interface import DiagnosticSnapshot, DiagnosticStatus, ActionResult
 
 
 class TestProposedAction:

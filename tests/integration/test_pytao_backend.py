@@ -7,7 +7,7 @@ import pytest
 from pathlib import Path
 
 from accops_agent.config import load_accelerator_config
-from accops_agent.diagnostic_control import (
+from accops_agent.accelerator_interface import (
     DiagnosticSnapshot,
     ParameterValue,
     ActionResult,

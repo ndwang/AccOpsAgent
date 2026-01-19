@@ -7,7 +7,7 @@ from collections import deque
 from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
 from ..config.schema import AcceleratorConfig, ConstraintDefinition, KnobDefinition
-from ..diagnostic_control import DiagnosticSnapshot
+from ..accelerator_interface import DiagnosticSnapshot
 from ..graph.state import ProposedAction
 from ..utils.constants import (
     DEFAULT_EXECUTION_HISTORY_MAX_SIZE,

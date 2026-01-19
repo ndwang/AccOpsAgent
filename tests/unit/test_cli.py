@@ -27,7 +27,7 @@ from accops_agent.cli.input_handler import (
     get_user_input,
     parse_approval_response,
 )
-from accops_agent.diagnostic_control import (
+from accops_agent.accelerator_interface import (
     ActionResult,
     DiagnosticSnapshot,
     DiagnosticStatus,

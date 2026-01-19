@@ -35,7 +35,7 @@ from accops_agent.cli import (
     print_warning,
 )
 from accops_agent.cli.input_handler import ApprovalStatus
-from accops_agent.diagnostic_control import MCPBackend
+from accops_agent.accelerator_interface import MCPBackend
 from accops_agent.graph import (
     HUMAN_APPROVAL,
     build_graph,

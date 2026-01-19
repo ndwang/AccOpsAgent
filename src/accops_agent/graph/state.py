@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional, TypedDict
 
-from ..diagnostic_control import ActionResult, DiagnosticSnapshot
+from ..accelerator_interface import ActionResult, DiagnosticSnapshot
 
 
 class ProposedAction(TypedDict, total=False):

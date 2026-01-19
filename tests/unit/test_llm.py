@@ -4,7 +4,7 @@ import json
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-from accops_agent.diagnostic_control import DiagnosticSnapshot, DiagnosticStatus
+from accops_agent.accelerator_interface import DiagnosticSnapshot, DiagnosticStatus
 from accops_agent.llm.client import LLMClient
 from accops_agent.llm.prompts import (
     create_diagnostic_interpretation_prompt,

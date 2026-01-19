@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.runnables import RunnableConfig
 
-from ..diagnostic_control import AcceleratorBackend
+from ..accelerator_interface import AcceleratorBackend
 from ..llm import LLMClient
 from ..llm.parsers import parse_actions_from_llm, parse_issues_from_text, parse_verification_result
 from ..llm.prompts import (

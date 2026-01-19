@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from accops_agent.diagnostic_control.mcp_backend import MCPBackend
-from accops_agent.diagnostic_control import DiagnosticStatus
+from accops_agent.accelerator_interface.mcp_backend import MCPBackend
+from accops_agent.accelerator_interface import DiagnosticStatus
 
 
 class MockTextContent:
@@ -69,7 +69,7 @@ class TestMCPBackendInit:
 class TestMCPBackendInitialize:
     """Tests for MCPBackend.initialize()."""
 
-    @patch("accops_agent.diagnostic_control.mcp_backend.stdio_client")
+    @patch("accops_agent.accelerator_interface.mcp_backend.stdio_client")
     def test_initialize_success(self, mock_stdio_client, mock_session, config_path):
         """Test successful initialization."""
         # Setup mock
@@ -80,7 +80,7 @@ class TestMCPBackendInitialize:
 
         # Mock ClientSession
         with patch(
-            "accops_agent.diagnostic_control.mcp_backend.ClientSession"
+            "accops_agent.accelerator_interface.mcp_backend.ClientSession"
         ) as mock_client_session:
             mock_client_session.return_value = mock_session
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -153,7 +153,7 @@ class TestMCPBackendInitialize:
             assert len(backend.config.knobs) == 1
             assert len(backend.config.diagnostics) == 1
 
-    @patch("accops_agent.diagnostic_control.mcp_backend.stdio_client")
+    @patch("accops_agent.accelerator_interface.mcp_backend.stdio_client")
     def test_initialize_connection_failure(self, mock_stdio_client, mock_session, config_path):
         """Test initialization failure when connection fails."""
         mock_cm = AsyncMock()
@@ -162,7 +162,7 @@ class TestMCPBackendInitialize:
         mock_stdio_client.return_value = mock_cm
 
         with patch(
-            "accops_agent.diagnostic_control.mcp_backend.ClientSession"
+            "accops_agent.accelerator_interface.mcp_backend.ClientSession"
         ) as mock_client_session:
             mock_client_session.return_value = mock_session
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -186,7 +186,7 @@ class TestMCPBackendInitialize:
 class TestMCPBackendReadDiagnostic:
     """Tests for MCPBackend.read_diagnostic()."""
 
-    @patch("accops_agent.diagnostic_control.mcp_backend.stdio_client")
+    @patch("accops_agent.accelerator_interface.mcp_backend.stdio_client")
     def test_read_diagnostic_success(self, mock_stdio_client, mock_session, config_path):
         """Test successful diagnostic read."""
         # Setup mock for initialization
@@ -196,7 +196,7 @@ class TestMCPBackendReadDiagnostic:
         mock_stdio_client.return_value = mock_cm
 
         with patch(
-            "accops_agent.diagnostic_control.mcp_backend.ClientSession"
+            "accops_agent.accelerator_interface.mcp_backend.ClientSession"
         ) as mock_client_session:
             mock_client_session.return_value = mock_session
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -275,7 +275,7 @@ class TestMCPBackendReadDiagnostic:
 class TestMCPBackendSetParameter:
     """Tests for MCPBackend.set_parameter()."""
 
-    @patch("accops_agent.diagnostic_control.mcp_backend.stdio_client")
+    @patch("accops_agent.accelerator_interface.mcp_backend.stdio_client")
     def test_set_parameter_success(self, mock_stdio_client, mock_session, config_path):
         """Test successful parameter set."""
         mock_cm = AsyncMock()
@@ -284,7 +284,7 @@ class TestMCPBackendSetParameter:
         mock_stdio_client.return_value = mock_cm
 
         with patch(
-            "accops_agent.diagnostic_control.mcp_backend.ClientSession"
+            "accops_agent.accelerator_interface.mcp_backend.ClientSession"
         ) as mock_client_session:
             mock_client_session.return_value = mock_session
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -358,7 +358,7 @@ class TestMCPBackendSetParameter:
 class TestMCPBackendShutdown:
     """Tests for MCPBackend.shutdown()."""
 
-    @patch("accops_agent.diagnostic_control.mcp_backend.stdio_client")
+    @patch("accops_agent.accelerator_interface.mcp_backend.stdio_client")
     def test_shutdown_success(self, mock_stdio_client, mock_session, config_path):
         """Test successful shutdown."""
         mock_cm = AsyncMock()
@@ -367,7 +367,7 @@ class TestMCPBackendShutdown:
         mock_stdio_client.return_value = mock_cm
 
         with patch(
-            "accops_agent.diagnostic_control.mcp_backend.ClientSession"
+            "accops_agent.accelerator_interface.mcp_backend.ClientSession"
         ) as mock_client_session:
             mock_client_session.return_value = mock_session
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
