@@ -5,6 +5,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from langchain_core.runnables import RunnableConfig
+
 from ..diagnostic_control import AcceleratorBackend
 from ..llm import LLMClient
 from ..llm.parsers import parse_actions_from_llm, parse_issues_from_text, parse_verification_result
@@ -24,7 +26,7 @@ from .state import AgentState, ExecutionHistoryEntry
 logger = logging.getLogger(__name__)
 
 
-def ingest_diagnostics_node(state: AgentState, config: Dict[str, Any]) -> Dict[str, Any]:
+def ingest_diagnostics_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     """Read all diagnostics from the accelerator backend.
 
     This node reads current diagnostic measurements and parameter values
@@ -80,7 +82,7 @@ def ingest_diagnostics_node(state: AgentState, config: Dict[str, Any]) -> Dict[s
         }
 
 
-def interpret_diagnostics_node(state: AgentState, config: Dict[str, Any] = None) -> Dict[str, Any]:
+def interpret_diagnostics_node(state: AgentState, config: RunnableConfig | None = None) -> Dict[str, Any]:
     """Interpret diagnostic measurements using LLM.
 
     This node analyzes the diagnostic data and identifies any issues
@@ -136,7 +138,7 @@ def interpret_diagnostics_node(state: AgentState, config: Dict[str, Any] = None)
     }
 
 
-def reasoning_planning_node(state: AgentState, config: Dict[str, Any] = None) -> Dict[str, Any]:
+def reasoning_planning_node(state: AgentState, config: RunnableConfig | None = None) -> Dict[str, Any]:
     """Generate strategy and reasoning to achieve user intent.
 
     This node uses LLM to create a high-level strategy for addressing
@@ -206,7 +208,7 @@ def reasoning_planning_node(state: AgentState, config: Dict[str, Any] = None) ->
     }
 
 
-def generate_actions_node(state: AgentState, config: Dict[str, Any] = None) -> Dict[str, Any]:
+def generate_actions_node(state: AgentState, config: RunnableConfig | None = None) -> Dict[str, Any]:
     """Generate specific parameter adjustment actions using LLM.
 
     This node creates concrete actions (parameter changes) based on
@@ -309,7 +311,7 @@ def human_approval_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
-def execute_action_node(state: AgentState, config: Dict[str, Any]) -> Dict[str, Any]:
+def execute_action_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     """Execute approved parameter changes.
 
     This node executes the approved action(s) via the backend and
@@ -391,7 +393,7 @@ def execute_action_node(state: AgentState, config: Dict[str, Any]) -> Dict[str, 
         }
 
 
-def verify_results_node(state: AgentState, config: Dict[str, Any] = None) -> Dict[str, Any]:
+def verify_results_node(state: AgentState, config: RunnableConfig | None = None) -> Dict[str, Any]:
     """Verify results of action execution using LLM.
 
     This node analyzes whether the executed action had the desired

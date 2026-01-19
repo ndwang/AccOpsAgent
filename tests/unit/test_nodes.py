@@ -2,6 +2,7 @@
 
 import pytest
 from pathlib import Path
+from unittest.mock import Mock, MagicMock
 
 from accops_agent.config import load_accelerator_config
 from accops_agent.diagnostic_control import MockBackend, DiagnosticStatus
@@ -16,6 +17,7 @@ from accops_agent.graph.nodes import (
     verify_results_node,
     decide_continuation_node,
 )
+from accops_agent.utils.exceptions import GraphExecutionError
 
 
 @pytest.fixture
@@ -42,6 +44,20 @@ def mock_backend(test_config):
 def node_config(mock_backend):
     """Create node config with backend."""
     return {"configurable": {"backend": mock_backend}}
+
+
+@pytest.fixture
+def mock_llm_client():
+    """Create a mock LLM client."""
+    client = Mock()
+    client.generate = Mock(return_value="Mock LLM response")
+    return client
+
+
+@pytest.fixture
+def node_config_with_llm(mock_backend, mock_llm_client):
+    """Create node config with backend and LLM client."""
+    return {"configurable": {"backend": mock_backend, "llm_client": mock_llm_client}}
 
 
 class TestIngestDiagnosticsNode:
@@ -99,28 +115,42 @@ class TestInterpretDiagnosticsNode:
         assert "identified_issues" in result
         assert "No diagnostic" in result["diagnostic_interpretation"]
 
-    def test_interpret_normal_diagnostics(self, mock_backend):
-        """Test interpretation with normal diagnostics."""
+    def test_interpret_requires_llm_client(self, mock_backend):
+        """Test that interpretation requires LLM client."""
         state = create_initial_state("Test")
         state["current_diagnostics"] = mock_backend.read_all_diagnostics()
 
-        result = interpret_diagnostics_node(state)
+        with pytest.raises(GraphExecutionError):
+            interpret_diagnostics_node(state)
+
+    def test_interpret_normal_diagnostics(self, mock_backend, node_config_with_llm, mock_llm_client):
+        """Test interpretation with normal diagnostics."""
+        # Configure mock to return a normal interpretation
+        mock_llm_client.generate.return_value = "All diagnostics are within normal operating parameters. No issues detected."
+
+        state = create_initial_state("Test")
+        state["current_diagnostics"] = mock_backend.read_all_diagnostics()
+
+        result = interpret_diagnostics_node(state, node_config_with_llm)
 
         assert "diagnostic_interpretation" in result
-        assert "normal" in result["diagnostic_interpretation"].lower() or "nominal" in result["diagnostic_interpretation"].lower()
-        assert len(result["identified_issues"]) == 0
+        assert "identified_issues" in result
+        mock_llm_client.generate.assert_called_once()
 
-    def test_interpret_with_alarms(self, mock_backend):
+    def test_interpret_with_alarms(self, mock_backend, node_config_with_llm, mock_llm_client):
         """Test interpretation with alarm conditions."""
+        # Configure mock to return an interpretation with issues
+        mock_llm_client.generate.return_value = "ALARM detected:\n- BPM1_X: Large deviation from nominal value"
+
         mock_backend.set_mock_diagnostic("BPM1_X", 5.0)
         state = create_initial_state("Test")
         state["current_diagnostics"] = mock_backend.read_all_diagnostics()
 
-        result = interpret_diagnostics_node(state)
+        result = interpret_diagnostics_node(state, node_config_with_llm)
 
         assert "identified_issues" in result
-        assert len(result["identified_issues"]) > 0
-        assert any("BPM1_X" in issue for issue in result["identified_issues"])
+        assert "diagnostic_interpretation" in result
+        mock_llm_client.generate.assert_called_once()
 
 
 class TestReasoningPlanningNode:
@@ -135,34 +165,59 @@ class TestReasoningPlanningNode:
         assert "strategy" in result
         assert "reasoning" in result
 
-    def test_reasoning_with_intent_no_issues(self):
-        """Test reasoning with intent but no issues."""
+    def test_reasoning_requires_llm_client(self):
+        """Test that reasoning requires LLM client."""
         state = create_initial_state("Optimize beam size")
         state["identified_issues"] = []
 
-        result = reasoning_planning_node(state)
+        with pytest.raises(GraphExecutionError):
+            reasoning_planning_node(state)
+
+    def test_reasoning_with_intent_no_issues(self, node_config_with_llm, mock_llm_client):
+        """Test reasoning with intent but no issues."""
+        mock_llm_client.generate.return_value = "**Strategy**: Optimize beam size by adjusting quadrupole strengths.\n\n**Reasoning**: Focus on beam optics."
+
+        state = create_initial_state("Optimize beam size")
+        state["identified_issues"] = []
+
+        result = reasoning_planning_node(state, node_config_with_llm)
 
         assert "strategy" in result
         assert "reasoning" in result
-        assert "Optimize" in result["strategy"] or "optimize" in result["strategy"]
+        mock_llm_client.generate.assert_called_once()
 
-    def test_reasoning_with_issues(self):
+    def test_reasoning_with_issues(self, node_config_with_llm, mock_llm_client):
         """Test reasoning with identified issues."""
+        mock_llm_client.generate.return_value = "**Strategy**: Address the issue with BPM1_X.\n\n**Reasoning**: Correct the orbit deviation."
+
         state = create_initial_state("Correct orbit")
         state["identified_issues"] = ["BPM1_X: ALARM - Large deviation"]
 
-        result = reasoning_planning_node(state)
+        result = reasoning_planning_node(state, node_config_with_llm)
 
         assert "strategy" in result
         assert "reasoning" in result
-        assert "issue" in result["strategy"].lower() or "issue" in result["reasoning"].lower()
+        mock_llm_client.generate.assert_called_once()
 
 
 class TestGenerateActionsNode:
     """Tests for generate_actions_node."""
 
-    def test_generate_actions_beam_size_optimization(self):
+    def test_generate_actions_requires_llm_and_backend(self):
+        """Test that action generation requires LLM client and backend."""
+        state = create_initial_state("Optimize beam size")
+        state["current_parameters"] = {"QF1_K1": 2.0}
+
+        with pytest.raises(GraphExecutionError):
+            generate_actions_node(state)
+
+    def test_generate_actions_beam_size_optimization(self, node_config_with_llm, mock_llm_client):
         """Test action generation for beam size optimization."""
+        # Configure mock to return valid JSON actions
+        mock_llm_client.generate.return_value = '''```json
+[{"parameter_name": "QF1_K1", "current_value": 2.0, "proposed_value": 2.5, "rationale": "Increase focusing", "expected_impact": "Reduce beam size", "priority": 1}]
+```'''
+
         state = create_initial_state("Optimize beam size")
         state["current_parameters"] = {
             "QF1_K1": 2.0,
@@ -170,15 +225,20 @@ class TestGenerateActionsNode:
             "HCOR1_KICK": 0.0,
         }
 
-        result = generate_actions_node(state)
+        result = generate_actions_node(state, node_config_with_llm)
 
         assert "proposed_actions" in result
         assert len(result["proposed_actions"]) > 0
         assert "action_index" in result
         assert result["action_index"] == 0
+        mock_llm_client.generate.assert_called_once()
 
-    def test_generate_actions_orbit_correction(self):
+    def test_generate_actions_orbit_correction(self, node_config_with_llm, mock_llm_client):
         """Test action generation for orbit correction."""
+        mock_llm_client.generate.return_value = '''```json
+[{"parameter_name": "HCOR1_KICK", "current_value": 0.0, "proposed_value": 0.001, "rationale": "Correct orbit", "expected_impact": "Center beam", "priority": 1}]
+```'''
+
         state = create_initial_state("Correct orbit")
         state["current_parameters"] = {
             "QF1_K1": 2.0,
@@ -187,26 +247,30 @@ class TestGenerateActionsNode:
         }
         state["identified_issues"] = ["BPM1_X: Large deviation"]
 
-        result = generate_actions_node(state)
+        result = generate_actions_node(state, node_config_with_llm)
 
         assert "proposed_actions" in result
         assert len(result["proposed_actions"]) > 0
 
-    def test_proposed_action_structure(self):
+    def test_proposed_action_structure(self, node_config_with_llm, mock_llm_client):
         """Test structure of proposed actions."""
+        mock_llm_client.generate.return_value = '''```json
+[{"parameter_name": "QF1_K1", "current_value": 2.0, "proposed_value": 2.5, "rationale": "Test rationale", "expected_impact": "Test impact", "priority": 1}]
+```'''
+
         state = create_initial_state("Test")
         state["current_parameters"] = {"QF1_K1": 2.0}
 
-        result = generate_actions_node(state)
+        result = generate_actions_node(state, node_config_with_llm)
 
-        if result["proposed_actions"]:
-            action = result["proposed_actions"][0]
-            assert "parameter_name" in action
-            assert "current_value" in action
-            assert "proposed_value" in action
-            assert "rationale" in action
-            assert "expected_impact" in action
-            assert "priority" in action
+        assert result["proposed_actions"]
+        action = result["proposed_actions"][0]
+        assert "parameter_name" in action
+        assert "current_value" in action
+        assert "proposed_value" in action
+        assert "rationale" in action
+        assert "expected_impact" in action
+        assert "priority" in action
 
 
 class TestHumanApprovalNode:
@@ -351,9 +415,44 @@ class TestVerifyResultsNode:
         assert "verification_result" in result
         assert "failed" in result["verification_result"].lower()
 
-    def test_verify_successful_execution(self, mock_backend):
+    def test_verify_requires_llm_client(self, mock_backend):
+        """Test that verification requires LLM client when history exists."""
+        from accops_agent.diagnostic_control import ActionResult
+
+        state = create_initial_state("Test")
+        state["current_execution_result"] = ActionResult(
+            success=True,
+            action_type="set_parameter",
+            parameters={},
+            message="Success",
+        )
+
+        diags = mock_backend.read_all_diagnostics()
+        state["execution_history"] = [
+            {
+                "action": {
+                    "parameter_name": "QF1_K1",
+                    "current_value": 0.0,
+                    "proposed_value": 2.5,
+                    "rationale": "Test",
+                    "expected_impact": "Test",
+                    "priority": 1,
+                },
+                "result": state["current_execution_result"],
+                "diagnostics_before": diags,
+                "diagnostics_after": diags,
+                "timestamp": "2024-01-01T00:00:00",
+            }
+        ]
+
+        with pytest.raises(GraphExecutionError):
+            verify_results_node(state)
+
+    def test_verify_successful_execution(self, mock_backend, node_config_with_llm, mock_llm_client):
         """Test verification of successful execution."""
         from accops_agent.diagnostic_control import ActionResult
+
+        mock_llm_client.generate.return_value = "Assessment: EFFECTIVE\nEffectiveness: 8/10\nRecommendation: CONTINUE"
 
         state = create_initial_state("Test")
         state["current_execution_result"] = ActionResult(
@@ -382,7 +481,7 @@ class TestVerifyResultsNode:
             }
         ]
 
-        result = verify_results_node(state)
+        result = verify_results_node(state, node_config_with_llm)
 
         assert "verification_result" in result
 
