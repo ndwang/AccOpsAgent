@@ -1,0 +1,165 @@
+name: "Example Linear Accelerator"
+description: "Example configuration for a linear accelerator with basic diagnostics and controls"
+
+# Optional: Path to Tao initialization file (can be absolute or relative to this config file)
+tao_init_file: null  # Set to your Tao init file path when using real Tao
+
+knobs:
+  - name: "QF1_K1"
+    description: "Focusing quadrupole QF1 strength"
+    min_value: -5.0
+    max_value: 5.0
+    unit: "T/m"
+    rate_limit: 0.5  # Maximum change per step
+    element_type: "quadrupole"
+    tao_variable: "quad::QF1[K1]"  # Example Tao variable name
+
+  - name: "QD1_K1"
+    description: "Defocusing quadrupole QD1 strength"
+    min_value: -5.0
+    max_value: 5.0
+    unit: "T/m"
+    rate_limit: 0.5
+    element_type: "quadrupole"
+    tao_variable: "quad::QD1[K1]"
+
+  - name: "HCOR1_KICK"
+    description: "Horizontal corrector 1 kick angle"
+    min_value: -0.001
+    max_value: 0.001
+    unit: "rad"
+    rate_limit: 0.0002
+    element_type: "corrector"
+    tao_variable: "kicker::HCOR1[HKICK]"
+
+  - name: "VCOR1_KICK"
+    description: "Vertical corrector 1 kick angle"
+    min_value: -0.001
+    max_value: 0.001
+    unit: "rad"
+    rate_limit: 0.0002
+    element_type: "corrector"
+    tao_variable: "kicker::VCOR1[VKICK]"
+
+  - name: "CAV1_VOLTAGE"
+    description: "RF cavity 1 voltage"
+    min_value: 0.0
+    max_value: 10.0
+    unit: "MV"
+    rate_limit: 0.5
+    element_type: "cavity"
+    tao_variable: "rfcavity::CAV1[VOLTAGE]"
+
+diagnostics:
+  - name: "BPM1_X"
+    description: "Beam position monitor 1 - horizontal position"
+    measurement_type: "orbit"
+    unit: "mm"
+    nominal_value: 0.0
+    tolerance: 0.5
+    alarm_threshold: 2.0
+    tao_variable: "orbit.x[BPM1]"
+
+  - name: "BPM1_Y"
+    description: "Beam position monitor 1 - vertical position"
+    measurement_type: "orbit"
+    unit: "mm"
+    nominal_value: 0.0
+    tolerance: 0.5
+    alarm_threshold: 2.0
+    tao_variable: "orbit.y[BPM1]"
+
+  - name: "BPM2_X"
+    description: "Beam position monitor 2 - horizontal position"
+    measurement_type: "orbit"
+    unit: "mm"
+    nominal_value: 0.0
+    tolerance: 0.5
+    alarm_threshold: 2.0
+    tao_variable: "orbit.x[BPM2]"
+
+  - name: "BPM2_Y"
+    description: "Beam position monitor 2 - vertical position"
+    measurement_type: "orbit"
+    unit: "mm"
+    nominal_value: 0.0
+    tolerance: 0.5
+    alarm_threshold: 2.0
+    tao_variable: "orbit.y[BPM2]"
+
+  - name: "BEAM_SIZE_X"
+    description: "Horizontal beam size at target"
+    measurement_type: "beam_size"
+    unit: "mm"
+    nominal_value: 1.0
+    tolerance: 0.2
+    alarm_threshold: 0.5
+    tao_variable: "beam.sigma_x[TARGET]"
+
+  - name: "BEAM_SIZE_Y"
+    description: "Vertical beam size at target"
+    measurement_type: "beam_size"
+    unit: "mm"
+    nominal_value: 1.0
+    tolerance: 0.2
+    alarm_threshold: 0.5
+    tao_variable: "beam.sigma_y[TARGET]"
+
+  - name: "TRANSMISSION"
+    description: "Beam transmission through beamline"
+    measurement_type: "transmission"
+    unit: "percent"
+    nominal_value: 95.0
+    tolerance: 5.0
+    alarm_threshold: 10.0
+    tao_variable: "beam.transmission"
+
+  - name: "BEAM_ENERGY"
+    description: "Beam energy at target"
+    measurement_type: "energy"
+    unit: "MeV"
+    nominal_value: 100.0
+    tolerance: 0.5
+    alarm_threshold: 1.0
+    tao_variable: "beam.e_tot[TARGET]"
+
+constraints:
+  - constraint_id: "global_rate_limit"
+    description: "Maximum number of parameter changes per minute"
+    constraint_type: "rate_limit"
+    parameters:
+      max_changes_per_minute: 5
+      window_seconds: 60
+    enabled: true
+
+  - constraint_id: "orbit_interlock"
+    description: "Halt tuning if orbit exceeds critical limits"
+    constraint_type: "interlock"
+    parameters:
+      diagnostic: "BPM1_X"
+      threshold: 5.0
+      action: "halt"
+    enabled: true
+
+  - constraint_id: "transmission_interlock"
+    description: "Halt tuning if transmission drops too low"
+    constraint_type: "interlock"
+    parameters:
+      diagnostic: "TRANSMISSION"
+      threshold: 80.0
+      action: "halt"
+      comparison: "less_than"
+    enabled: true
+
+  - constraint_id: "max_simultaneous_changes"
+    description: "Maximum number of knobs that can be changed simultaneously"
+    constraint_type: "limit"
+    parameters:
+      max_knobs: 2
+    enabled: true
+
+metadata:
+  author: "AccOps Agent"
+  version: "1.0"
+  created_date: "2026-01-18"
+  notes: "Example configuration for testing and development"
