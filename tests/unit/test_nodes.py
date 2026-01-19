@@ -235,8 +235,9 @@ class TestGenerateActionsNode:
 
     def test_generate_actions_orbit_correction(self, node_config_with_llm, mock_llm_client):
         """Test action generation for orbit correction."""
+        # Use a change within rate limit (0.0002 for HCOR1_KICK)
         mock_llm_client.generate.return_value = '''```json
-[{"parameter_name": "HCOR1_KICK", "current_value": 0.0, "proposed_value": 0.001, "rationale": "Correct orbit", "expected_impact": "Center beam", "priority": 1}]
+[{"parameter_name": "HCOR1_KICK", "current_value": 0.0, "proposed_value": 0.0001, "rationale": "Correct orbit", "expected_impact": "Center beam", "priority": 1}]
 ```'''
 
         state = create_initial_state("Correct orbit")
@@ -314,10 +315,11 @@ class TestExecuteActionNode:
 
     def test_execute_action_success(self, mock_backend, node_config):
         """Test successful action execution."""
+        # Use a change within rate limit (0.5 for QF1_K1)
         action: ProposedAction = {
             "parameter_name": "QF1_K1",
-            "current_value": 0.0,
-            "proposed_value": 2.5,
+            "current_value": 2.0,
+            "proposed_value": 2.3,  # Change of 0.3, within rate limit of 0.5
             "rationale": "Test",
             "expected_impact": "Test",
             "priority": 1,
@@ -336,12 +338,12 @@ class TestExecuteActionNode:
         assert len(result["execution_history"]) == 1
         assert "current_diagnostics" in result
 
-    def test_execute_action_invalid_parameter(self, mock_backend, node_config):
-        """Test execution with invalid parameter value."""
+    def test_execute_action_safety_violation(self, mock_backend, node_config):
+        """Test execution blocked by safety validation (out of limits)."""
         action: ProposedAction = {
             "parameter_name": "QF1_K1",
             "current_value": 0.0,
-            "proposed_value": 100.0,  # Outside limits
+            "proposed_value": 100.0,  # Outside limits (max is 5.0)
             "rationale": "Test",
             "expected_impact": "Test",
             "priority": 1,
@@ -353,8 +355,32 @@ class TestExecuteActionNode:
 
         result = execute_action_node(state, node_config)
 
-        assert "current_execution_result" in result
-        assert not result["current_execution_result"].success
+        # Safety check should block execution
+        assert "error" in result
+        assert result["error_type"] == "safety_violation"
+        assert "safety_violations" in result
+
+    def test_execute_action_rate_limit_violation(self, mock_backend, node_config):
+        """Test execution blocked by rate limit violation."""
+        action: ProposedAction = {
+            "parameter_name": "QF1_K1",
+            "current_value": 0.0,
+            "proposed_value": 2.0,  # Change of 2.0, exceeds rate limit of 0.5
+            "rationale": "Test",
+            "expected_impact": "Test",
+            "priority": 1,
+        }
+
+        state = create_initial_state("Test")
+        state["proposed_actions"] = [action]
+        state["action_index"] = 0
+
+        result = execute_action_node(state, node_config)
+
+        # Safety check should block execution
+        assert "error" in result
+        assert result["error_type"] == "safety_violation"
+        assert "rate limit" in result["error"].lower()
 
     def test_execute_action_no_actions(self, mock_backend, node_config):
         """Test execution with no actions."""
@@ -370,10 +396,11 @@ class TestExecuteActionNode:
         """Test execution when backend not connected."""
         mock_backend.shutdown()
 
+        # Use a change within rate limit
         action: ProposedAction = {
             "parameter_name": "QF1_K1",
-            "current_value": 0.0,
-            "proposed_value": 2.5,
+            "current_value": 2.0,
+            "proposed_value": 2.3,  # Within rate limit
             "rationale": "Test",
             "expected_impact": "Test",
             "priority": 1,

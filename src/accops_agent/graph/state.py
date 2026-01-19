@@ -132,6 +132,9 @@ class AgentState(TypedDict, total=False):
     error: Optional[str]
     error_type: Optional[str]
 
+    # Safety validation
+    safety_violations: List[str]
+
     # Additional context
     metadata: Dict[str, Any]
 
@@ -169,5 +172,6 @@ def create_initial_state(user_intent: str, backend_type: str = "mock") -> AgentS
         max_iterations=10,
         error=None,
         error_type=None,
+        safety_violations=[],
         metadata={},
     )

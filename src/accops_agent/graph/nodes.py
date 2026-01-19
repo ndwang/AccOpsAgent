@@ -1,9 +1,8 @@
 """Node implementations for the AccOps agent graph."""
 
-import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from langchain_core.runnables import RunnableConfig
 
@@ -20,8 +19,9 @@ from ..llm.prompts import (
     create_action_generation_prompt,
     create_verification_prompt,
 )
-from ..utils.exceptions import DiagnosticReadError, GraphExecutionError
-from .state import AgentState, ExecutionHistoryEntry
+from ..safety import ConstraintChecker
+from ..utils.exceptions import ConstraintViolationError, DiagnosticReadError, GraphExecutionError
+from .state import AgentState, ExecutionHistoryEntry, ProposedAction
 
 logger = logging.getLogger(__name__)
 
@@ -212,14 +212,15 @@ def generate_actions_node(state: AgentState, config: RunnableConfig | None = Non
     """Generate specific parameter adjustment actions using LLM.
 
     This node creates concrete actions (parameter changes) based on
-    the strategy and current machine state.
+    the strategy and current machine state. Actions are validated
+    against safety constraints before being proposed.
 
     Args:
         state: Current agent state
         config: Config with LLM client and backend (required)
 
     Returns:
-        Updated state with proposed_actions
+        Updated state with proposed_actions and any safety_violations
 
     Raises:
         GraphExecutionError: If LLM client or backend not available, or if generation fails
@@ -230,6 +231,7 @@ def generate_actions_node(state: AgentState, config: RunnableConfig | None = Non
     strategy = state.get("strategy", "")
     reasoning = state.get("reasoning", "")
     current_params = state.get("current_parameters", {})
+    current_diagnostics = state.get("current_diagnostics", [])
 
     # Get LLM client and backend from config
     llm_client: Optional[LLMClient] = None
@@ -244,12 +246,13 @@ def generate_actions_node(state: AgentState, config: RunnableConfig | None = Non
     if not backend:
         raise GraphExecutionError("Backend not available in config")
 
-    # Build parameter metadata from backend config
+    # Build parameter metadata from backend config (include rate limits for LLM)
     parameter_metadata = {}
     for knob in backend.config.knobs:
         parameter_metadata[knob.name] = {
             "min": knob.min_value,
             "max": knob.max_value,
+            "rate_limit": knob.rate_limit,
             "type": knob.element_type,
             "unit": knob.unit,
         }
@@ -274,9 +277,60 @@ def generate_actions_node(state: AgentState, config: RunnableConfig | None = Non
 
     logger.info(f"Generated {len(actions)} action(s) with LLM")
 
+    # Validate actions against safety constraints (strict mode)
+    checker = ConstraintChecker(backend.config)
+    checker.update_diagnostics(current_diagnostics)
+
+    validation_result = checker.validate_actions(actions)
+    safety_violations: List[str] = []
+
+    if not validation_result.is_valid:
+        # Collect all violation messages
+        for violation in validation_result.all_violations:
+            safety_violations.append(str(violation))
+
+        # Filter out invalid actions (keep only valid ones)
+        valid_actions: List[ProposedAction] = []
+        for i, result in enumerate(validation_result.results):
+            if result.is_valid:
+                valid_actions.append(actions[i])
+            else:
+                logger.warning(f"Action {i} rejected: {result.error_messages}")
+
+        # Check if any global violations would block all actions
+        if validation_result.global_violations:
+            for violation in validation_result.global_violations:
+                logger.warning(f"Global safety violation: {violation}")
+
+            # If there are global violations (like interlocks), reject all actions
+            if any(v.severity.value == "error" for v in validation_result.global_violations):
+                logger.error("Global safety constraint violated - all actions rejected")
+                return {
+                    "proposed_actions": [],
+                    "action_index": 0,
+                    "safety_violations": safety_violations,
+                    "error": "Safety constraints violated - actions rejected",
+                    "error_type": "safety_violation",
+                }
+
+        actions = valid_actions
+
+    if not actions:
+        logger.error("No actions passed safety validation")
+        return {
+            "proposed_actions": [],
+            "action_index": 0,
+            "safety_violations": safety_violations,
+            "error": "All proposed actions failed safety validation",
+            "error_type": "safety_violation",
+        }
+
+    logger.info(f"{len(actions)} action(s) passed safety validation")
+
     return {
         "proposed_actions": actions,
         "action_index": 0,
+        "safety_violations": safety_violations,
     }
 
 
@@ -315,7 +369,8 @@ def execute_action_node(state: AgentState, config: RunnableConfig) -> Dict[str, 
     """Execute approved parameter changes.
 
     This node executes the approved action(s) via the backend and
-    records the results.
+    records the results. A final safety check is performed before
+    execution to catch any state changes since validation.
 
     Args:
         state: Current agent state
@@ -346,12 +401,29 @@ def execute_action_node(state: AgentState, config: RunnableConfig) -> Dict[str, 
         # Read diagnostics before execution
         diagnostics_before = backend.read_all_diagnostics()
 
+        # Final safety check before execution (strict mode)
+        checker = ConstraintChecker(backend.config)
+        checker.update_diagnostics(diagnostics_before)
+
+        validation_result = checker.validate_action(action)
+        if not validation_result.is_valid:
+            error_msgs = "; ".join(validation_result.error_messages)
+            logger.error(f"Final safety check failed: {error_msgs}")
+            return {
+                "error": f"Safety check failed before execution: {error_msgs}",
+                "error_type": "safety_violation",
+                "safety_violations": validation_result.error_messages,
+            }
+
         # Execute the parameter change
         result = backend.set_parameter(
             action["parameter_name"], action["proposed_value"]
         )
 
         if result.success:
+            # Record execution for global rate limiting
+            checker.record_execution()
+
             # Run calculation to propagate changes
             backend.run_calculation()
 
@@ -385,6 +457,12 @@ def execute_action_node(state: AgentState, config: RunnableConfig) -> Dict[str, 
                 "error_type": "execution_failed",
             }
 
+    except ConstraintViolationError as e:
+        logger.error(f"Safety constraint violation: {e}")
+        return {
+            "error": str(e),
+            "error_type": "safety_violation",
+        }
     except Exception as e:
         logger.error(f"Exception during action execution: {e}")
         return {
