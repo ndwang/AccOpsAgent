@@ -1,13 +1,19 @@
 """Constraint validation for safety checking."""
 
 import logging
+import operator
 import time
 from collections import deque
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
 from ..config.schema import AcceleratorConfig, ConstraintDefinition, KnobDefinition
 from ..diagnostic_control import DiagnosticSnapshot
 from ..graph.state import ProposedAction
+from ..utils.constants import (
+    DEFAULT_EXECUTION_HISTORY_MAX_SIZE,
+    DEFAULT_MAX_CHANGES_PER_MINUTE,
+    DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
+)
 from ..utils.exceptions import ConstraintViolationError
 from .constraints import (
     BatchValidationResult,
@@ -16,6 +22,15 @@ from .constraints import (
     Violation,
     ViolationSeverity,
 )
+
+# Comparison operators for interlock checks
+COMPARISON_OPERATORS: Dict[str, Callable[[float, float], bool]] = {
+    "greater_than": operator.gt,
+    "less_than": operator.lt,
+    "equals": operator.eq,
+    "greater_than_or_equal": operator.ge,
+    "less_than_or_equal": operator.le,
+}
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +58,7 @@ class ConstraintChecker:
             config: Accelerator configuration with knobs and constraints
         """
         self.config = config
-        self.execution_times: Deque[float] = deque(maxlen=100)
+        self.execution_times: Deque[float] = deque(maxlen=DEFAULT_EXECUTION_HISTORY_MAX_SIZE)
         self.current_diagnostics: Dict[str, DiagnosticSnapshot] = {}
 
         # Build lookup tables for fast access
@@ -306,8 +321,12 @@ class ConstraintChecker:
         # Find global rate limit constraint
         for constraint in self.config.constraints:
             if constraint.constraint_type == "rate_limit" and constraint.enabled:
-                max_changes = constraint.parameters.get("max_changes_per_minute", 10)
-                window_seconds = constraint.parameters.get("window_seconds", 60)
+                max_changes = constraint.parameters.get(
+                    "max_changes_per_minute", DEFAULT_MAX_CHANGES_PER_MINUTE
+                )
+                window_seconds = constraint.parameters.get(
+                    "window_seconds", DEFAULT_RATE_LIMIT_WINDOW_SECONDS
+                )
 
                 # Count executions in window
                 now = time.time()
@@ -356,14 +375,17 @@ class ConstraintChecker:
                 if not diagnostic:
                     continue  # Can't check without diagnostic data
 
-                # Check condition
-                triggered = False
-                if comparison == "greater_than":
-                    triggered = abs(diagnostic.value) > threshold
-                elif comparison == "less_than":
-                    triggered = diagnostic.value < threshold
-                elif comparison == "equals":
-                    triggered = diagnostic.value == threshold
+                # Check condition using comparison operators
+                compare_func = COMPARISON_OPERATORS.get(comparison)
+                if not compare_func:
+                    logger.warning(f"Unknown comparison operator: {comparison}")
+                    continue
+
+                # Use absolute value for greater_than to handle signed diagnostics
+                diagnostic_value = (
+                    abs(diagnostic.value) if comparison == "greater_than" else diagnostic.value
+                )
+                triggered = compare_func(diagnostic_value, threshold)
 
                 if triggered and action_type == "halt":
                     violations.append(

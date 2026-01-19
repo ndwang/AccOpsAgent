@@ -6,6 +6,12 @@ from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
 
+from ..utils.constants import (
+    DEFAULT_LLM_MAX_TOKENS,
+    DEFAULT_LLM_MODEL,
+    DEFAULT_LLM_TEMPERATURE,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,9 +33,9 @@ class LLMClient:
         self,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        model: str = "gpt-4",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
+        model: str = DEFAULT_LLM_MODEL,
+        temperature: float = DEFAULT_LLM_TEMPERATURE,
+        max_tokens: int = DEFAULT_LLM_MAX_TOKENS,
     ):
         """Initialize LLM client.
 

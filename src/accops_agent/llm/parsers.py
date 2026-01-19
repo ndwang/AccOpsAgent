@@ -5,9 +5,55 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
+from pydantic import BaseModel, Field, field_validator
+
 from ..graph.state import ProposedAction
+from ..utils.constants import (
+    ACTION_PRIORITY_MAX,
+    ACTION_PRIORITY_MIN,
+    EFFECTIVENESS_MAX,
+    EFFECTIVENESS_MIN,
+    VERIFICATION_SUMMARY_MAX_LENGTH,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class ProposedActionResponse(BaseModel):
+    """Pydantic model for validating LLM-generated action responses."""
+
+    parameter_name: str = Field(..., min_length=1)
+    current_value: float = Field(default=0.0)
+    proposed_value: float
+    rationale: str = Field(default="No rationale provided")
+    expected_impact: str = Field(default="Unknown impact")
+    priority: int = Field(default=2, ge=ACTION_PRIORITY_MIN, le=ACTION_PRIORITY_MAX)
+
+    @field_validator("parameter_name")
+    @classmethod
+    def validate_parameter_name(cls, v: str) -> str:
+        """Ensure parameter name is non-empty and stripped."""
+        return v.strip()
+
+    def to_proposed_action(self) -> ProposedAction:
+        """Convert to ProposedAction TypedDict."""
+        return {
+            "parameter_name": self.parameter_name,
+            "current_value": self.current_value,
+            "proposed_value": self.proposed_value,
+            "rationale": self.rationale,
+            "expected_impact": self.expected_impact,
+            "priority": self.priority,
+        }
+
+
+class VerificationResponse(BaseModel):
+    """Pydantic model for validating LLM verification responses."""
+
+    assessment: str = Field(default="NEUTRAL", pattern=r"^(POSITIVE|NEUTRAL|NEGATIVE)$")
+    effectiveness: int = Field(default=5, ge=EFFECTIVENESS_MIN, le=EFFECTIVENESS_MAX)
+    recommendation: str = Field(default="ITERATE", pattern=r"^(CONTINUE|ITERATE|REVISE)$")
+    summary: str = Field(default="")
 
 
 def parse_json_from_text(text: str) -> Optional[Dict[str, Any]]:
@@ -56,6 +102,7 @@ def parse_actions_from_llm(llm_output: str) -> List[ProposedAction]:
     """Parse proposed actions from LLM output.
 
     Expects JSON array of action objects with required fields.
+    Uses Pydantic models for validation.
 
     Args:
         llm_output: Raw LLM output text
@@ -63,44 +110,29 @@ def parse_actions_from_llm(llm_output: str) -> List[ProposedAction]:
     Returns:
         List of ProposedAction dicts
     """
-    try:
-        # Extract JSON from output
-        parsed = parse_json_from_text(llm_output)
+    # Extract JSON from output
+    parsed = parse_json_from_text(llm_output)
 
-        if parsed is None:
-            logger.warning("No JSON found in LLM output, attempting text parsing")
-            return parse_actions_from_text(llm_output)
+    if parsed is None:
+        logger.warning("No JSON found in LLM output, attempting text parsing")
+        return parse_actions_from_text(llm_output)
 
-        # Handle both single object and array
-        if isinstance(parsed, dict):
-            parsed = [parsed]
+    # Handle both single object and array
+    if isinstance(parsed, dict):
+        parsed = [parsed]
 
-        actions: List[ProposedAction] = []
-        for action_data in parsed:
-            # Validate required fields
-            required_fields = ["parameter_name", "proposed_value"]
-            if not all(field in action_data for field in required_fields):
-                logger.warning(f"Action missing required fields: {action_data}")
-                continue
+    actions: List[ProposedAction] = []
+    for action_data in parsed:
+        try:
+            # Use Pydantic model for validation
+            validated = ProposedActionResponse.model_validate(action_data)
+            actions.append(validated.to_proposed_action())
+        except Exception as e:
+            logger.warning(f"Action validation failed: {e}, data: {action_data}")
+            continue
 
-            # Build ProposedAction with available fields
-            action: ProposedAction = {
-                "parameter_name": action_data["parameter_name"],
-                "current_value": action_data.get("current_value", 0.0),
-                "proposed_value": float(action_data["proposed_value"]),
-                "rationale": action_data.get("rationale", "No rationale provided"),
-                "expected_impact": action_data.get("expected_impact", "Unknown impact"),
-                "priority": int(action_data.get("priority", 2)),
-            }
-
-            actions.append(action)
-
-        logger.info(f"Parsed {len(actions)} action(s) from LLM output")
-        return actions
-
-    except Exception as e:
-        logger.error(f"Failed to parse actions from LLM output: {e}")
-        return []
+    logger.info(f"Parsed {len(actions)} action(s) from LLM output")
+    return actions
 
 
 def parse_actions_from_text(text: str) -> List[ProposedAction]:
@@ -190,35 +222,51 @@ def parse_issues_from_text(text: str) -> List[str]:
 def parse_verification_result(text: str) -> Dict[str, Any]:
     """Parse verification assessment from LLM output.
 
+    Uses Pydantic model for validation with fallback defaults.
+
     Args:
         text: LLM verification output
 
     Returns:
-        Dict with assessment, effectiveness, recommendation
+        Dict with assessment, effectiveness, recommendation, summary
     """
-    result = {
-        "assessment": "NEUTRAL",
-        "effectiveness": 5,
-        "recommendation": "ITERATE",
-        "summary": text[:200],  # First 200 chars as summary
-    }
+    # Extract values from text using regex
+    assessment = "NEUTRAL"
+    effectiveness = 5
+    recommendation = "ITERATE"
 
     # Look for assessment
     assessment_pattern = r"(?:Assessment|Result):\s*(POSITIVE|NEUTRAL|NEGATIVE)"
     match = re.search(assessment_pattern, text, re.IGNORECASE)
     if match:
-        result["assessment"] = match.group(1).upper()
+        assessment = match.group(1).upper()
 
     # Look for effectiveness rating
     effectiveness_pattern = r"(?:Effectiveness|Rating):\s*(\d+)"
     match = re.search(effectiveness_pattern, text, re.IGNORECASE)
     if match:
-        result["effectiveness"] = int(match.group(1))
+        effectiveness = min(EFFECTIVENESS_MAX, max(EFFECTIVENESS_MIN, int(match.group(1))))
 
     # Look for recommendation
     recommendation_pattern = r"(?:Recommendation|Should we):\s*(CONTINUE|ITERATE|REVISE)"
     match = re.search(recommendation_pattern, text, re.IGNORECASE)
     if match:
-        result["recommendation"] = match.group(1).upper()
+        recommendation = match.group(1).upper()
 
-    return result
+    # Validate with Pydantic model
+    try:
+        validated = VerificationResponse(
+            assessment=assessment,
+            effectiveness=effectiveness,
+            recommendation=recommendation,
+            summary=text[:VERIFICATION_SUMMARY_MAX_LENGTH],
+        )
+        return validated.model_dump()
+    except Exception as e:
+        logger.warning(f"Verification response validation failed: {e}")
+        return {
+            "assessment": "NEUTRAL",
+            "effectiveness": 5,
+            "recommendation": "ITERATE",
+            "summary": text[:VERIFICATION_SUMMARY_MAX_LENGTH],
+        }

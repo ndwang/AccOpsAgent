@@ -1,6 +1,7 @@
 """Node implementations for the AccOps agent graph."""
 
 import logging
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -20,6 +21,13 @@ from ..llm.prompts import (
     create_verification_prompt,
 )
 from ..safety import ConstraintChecker
+from ..utils.constants import (
+    DEFAULT_MAX_ITERATIONS,
+    TEMPERATURE_ACTION_GENERATION,
+    TEMPERATURE_DIAGNOSTIC_ANALYSIS,
+    TEMPERATURE_REASONING_PLANNING,
+    TEMPERATURE_VERIFICATION,
+)
 from ..utils.exceptions import ConstraintViolationError, DiagnosticReadError, GraphExecutionError
 from .state import AgentState, ExecutionHistoryEntry, ProposedAction
 
@@ -124,7 +132,7 @@ def interpret_diagnostics_node(state: AgentState, config: RunnableConfig | None 
     interpretation = llm_client.generate(
         prompt=prompt,
         system_prompt=DIAGNOSTIC_INTERPRETATION_SYSTEM,
-        temperature=0.3,  # Lower temperature for diagnostic analysis
+        temperature=TEMPERATURE_DIAGNOSTIC_ANALYSIS,
     )
 
     # Parse issues from interpretation
@@ -184,7 +192,7 @@ def reasoning_planning_node(state: AgentState, config: RunnableConfig | None = N
     llm_output = llm_client.generate(
         prompt=prompt,
         system_prompt=REASONING_PLANNING_SYSTEM,
-        temperature=0.5,
+        temperature=TEMPERATURE_REASONING_PLANNING,
     )
 
     # Extract strategy and reasoning from output
@@ -193,7 +201,6 @@ def reasoning_planning_node(state: AgentState, config: RunnableConfig | None = N
 
     # Try to extract strategy section
     if "Strategy:" in llm_output or "**Strategy**" in llm_output:
-        import re
         strategy_match = re.search(
             r"\*\*Strategy\*\*:?\s*(.+?)(?:\n\n|\*\*)", llm_output, re.DOTALL
         )
@@ -266,7 +273,7 @@ def generate_actions_node(state: AgentState, config: RunnableConfig | None = Non
     llm_output = llm_client.generate(
         prompt=prompt,
         system_prompt=ACTION_GENERATION_SYSTEM,
-        temperature=0.3,  # Lower temperature for parameter choices
+        temperature=TEMPERATURE_ACTION_GENERATION,
     )
 
     # Parse actions from output
@@ -448,6 +455,7 @@ def execute_action_node(state: AgentState, config: RunnableConfig) -> Dict[str, 
                 "current_execution_result": result,
                 "execution_history": execution_history,
                 "current_diagnostics": diagnostics_after,
+                "action_index": action_index + 1,
             }
         else:
             logger.error(f"Action execution failed: {result.error}")
@@ -537,7 +545,7 @@ def verify_results_node(state: AgentState, config: RunnableConfig | None = None)
     llm_output = llm_client.generate(
         prompt=prompt,
         system_prompt=VERIFICATION_SYSTEM,
-        temperature=0.3,
+        temperature=TEMPERATURE_VERIFICATION,
     )
 
     # Parse verification result
@@ -571,7 +579,7 @@ def decide_continuation_node(state: AgentState) -> Dict[str, Any]:
     logger.info("Deciding continuation")
 
     iteration_count = state.get("iteration_count", 0) + 1
-    max_iterations = state.get("max_iterations", 10)
+    max_iterations = state.get("max_iterations", DEFAULT_MAX_ITERATIONS)
 
     # Check if max iterations reached
     if iteration_count >= max_iterations:

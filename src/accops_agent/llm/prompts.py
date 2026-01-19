@@ -51,18 +51,30 @@ def load_prompt_config(prompt_name: str) -> Dict[str, str]:
         return {"system_prompt": "", "user_prompt_template": ""}
 
 
-# Load system prompts from config files
-_diag_config = load_prompt_config("diagnostic_interpretation")
-DIAGNOSTIC_INTERPRETATION_SYSTEM = _diag_config.get("system_prompt", "")
+# Prompt configuration mapping: config_name -> exported_variable_name
+_PROMPT_CONFIG_MAPPING = {
+    "diagnostic_interpretation": "DIAGNOSTIC_INTERPRETATION_SYSTEM",
+    "reasoning_planning": "REASONING_PLANNING_SYSTEM",
+    "action_generation": "ACTION_GENERATION_SYSTEM",
+    "verification": "VERIFICATION_SYSTEM",
+}
 
-_reasoning_config = load_prompt_config("reasoning_planning")
-REASONING_PLANNING_SYSTEM = _reasoning_config.get("system_prompt", "")
+# Load all system prompts from config files
+def _load_system_prompts() -> Dict[str, str]:
+    """Load all system prompts from config files."""
+    prompts = {}
+    for config_name, var_name in _PROMPT_CONFIG_MAPPING.items():
+        config = load_prompt_config(config_name)
+        prompts[var_name] = config.get("system_prompt", "")
+    return prompts
 
-_action_config = load_prompt_config("action_generation")
-ACTION_GENERATION_SYSTEM = _action_config.get("system_prompt", "")
+_LOADED_PROMPTS = _load_system_prompts()
 
-_verification_config = load_prompt_config("verification")
-VERIFICATION_SYSTEM = _verification_config.get("system_prompt", "")
+# Export system prompts as module-level constants
+DIAGNOSTIC_INTERPRETATION_SYSTEM = _LOADED_PROMPTS["DIAGNOSTIC_INTERPRETATION_SYSTEM"]
+REASONING_PLANNING_SYSTEM = _LOADED_PROMPTS["REASONING_PLANNING_SYSTEM"]
+ACTION_GENERATION_SYSTEM = _LOADED_PROMPTS["ACTION_GENERATION_SYSTEM"]
+VERIFICATION_SYSTEM = _LOADED_PROMPTS["VERIFICATION_SYSTEM"]
 
 
 def create_diagnostic_interpretation_prompt(
