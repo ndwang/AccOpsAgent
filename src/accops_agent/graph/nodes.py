@@ -1,10 +1,23 @@
 """Node implementations for the AccOps agent graph."""
 
+import json
 import logging
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from ..diagnostic_control import AcceleratorBackend
+from ..llm import LLMClient
+from ..llm.parsers import parse_actions_from_llm, parse_issues_from_text, parse_verification_result
+from ..llm.prompts import (
+    DIAGNOSTIC_INTERPRETATION_SYSTEM,
+    REASONING_PLANNING_SYSTEM,
+    ACTION_GENERATION_SYSTEM,
+    VERIFICATION_SYSTEM,
+    create_diagnostic_interpretation_prompt,
+    create_reasoning_planning_prompt,
+    create_action_generation_prompt,
+    create_verification_prompt,
+)
 from ..utils.exceptions import DiagnosticReadError, GraphExecutionError
 from .state import AgentState, ExecutionHistoryEntry
 
@@ -67,7 +80,7 @@ def ingest_diagnostics_node(state: AgentState, config: Dict[str, Any]) -> Dict[s
         }
 
 
-def interpret_diagnostics_node(state: AgentState) -> Dict[str, Any]:
+def interpret_diagnostics_node(state: AgentState, config: Dict[str, Any] = None) -> Dict[str, Any]:
     """Interpret diagnostic measurements using LLM.
 
     This node analyzes the diagnostic data and identifies any issues
@@ -75,16 +88,18 @@ def interpret_diagnostics_node(state: AgentState) -> Dict[str, Any]:
 
     Args:
         state: Current agent state with diagnostics
+        config: Config with LLM client (required)
 
     Returns:
         Updated state with diagnostic_interpretation and identified_issues
-    """
-    logger.info("Interpreting diagnostics")
 
-    # TODO: This will use LLM in Phase 5
-    # For now, provide rule-based interpretation
+    Raises:
+        GraphExecutionError: If LLM client not available or generation fails
+    """
+    logger.info("Interpreting diagnostics with LLM")
 
     diagnostics = state.get("current_diagnostics", [])
+    machine_status_summary = state.get("machine_status_summary", "Unknown")
 
     if not diagnostics:
         return {
@@ -92,27 +107,28 @@ def interpret_diagnostics_node(state: AgentState) -> Dict[str, Any]:
             "identified_issues": ["No diagnostics available"],
         }
 
-    issues = []
-    for diag in diagnostics:
-        if diag.is_alarm():
-            issues.append(
-                f"{diag.diagnostic_name}: ALARM - {diag.message or 'Exceeds alarm threshold'}"
-            )
-        elif not diag.is_healthy():
-            issues.append(
-                f"{diag.diagnostic_name}: WARNING - {diag.message or 'Outside tolerance'}"
-            )
+    # Get LLM client from config
+    llm_client: Optional[LLMClient] = None
+    if config and "configurable" in config:
+        llm_client = config["configurable"].get("llm_client")
 
-    if issues:
-        interpretation = (
-            f"Identified {len(issues)} issue(s) requiring attention. "
-            f"Machine status: {state.get('machine_status_summary', 'Unknown')}"
-        )
-    else:
-        interpretation = (
-            "All diagnostics are within normal operating ranges. "
-            "Machine is operating nominally."
-        )
+    if not llm_client:
+        raise GraphExecutionError("LLM client not available in config")
+
+    # Generate LLM prompt
+    prompt = create_diagnostic_interpretation_prompt(diagnostics, machine_status_summary)
+
+    # Get LLM interpretation
+    interpretation = llm_client.generate(
+        prompt=prompt,
+        system_prompt=DIAGNOSTIC_INTERPRETATION_SYSTEM,
+        temperature=0.3,  # Lower temperature for diagnostic analysis
+    )
+
+    # Parse issues from interpretation
+    issues = parse_issues_from_text(interpretation)
+
+    logger.info(f"LLM identified {len(issues)} issue(s)")
 
     return {
         "diagnostic_interpretation": interpretation,
@@ -120,7 +136,7 @@ def interpret_diagnostics_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
-def reasoning_planning_node(state: AgentState) -> Dict[str, Any]:
+def reasoning_planning_node(state: AgentState, config: Dict[str, Any] = None) -> Dict[str, Any]:
     """Generate strategy and reasoning to achieve user intent.
 
     This node uses LLM to create a high-level strategy for addressing
@@ -128,17 +144,20 @@ def reasoning_planning_node(state: AgentState) -> Dict[str, Any]:
 
     Args:
         state: Current agent state
+        config: Config with LLM client (required)
 
     Returns:
         Updated state with strategy and reasoning
-    """
-    logger.info("Generating strategy and reasoning")
 
-    # TODO: This will use LLM in Phase 5
-    # For now, provide rule-based reasoning
+    Raises:
+        GraphExecutionError: If LLM client not available or generation fails
+    """
+    logger.info("Generating strategy and reasoning with LLM")
 
     user_intent = state.get("user_intent", "")
+    diagnostic_interpretation = state.get("diagnostic_interpretation", "")
     issues = state.get("identified_issues", [])
+    current_parameters = state.get("current_parameters", {})
 
     if not user_intent:
         return {
@@ -146,19 +165,40 @@ def reasoning_planning_node(state: AgentState) -> Dict[str, Any]:
             "reasoning": "Cannot plan without user goal",
         }
 
-    # Simple rule-based strategy
-    if issues:
-        strategy = f"Address {len(issues)} identified issue(s) to achieve goal: {user_intent}"
-        reasoning = (
-            f"The machine has issues that need correction: {', '.join(issues[:3])}. "
-            f"Will propose parameter adjustments to resolve these issues and achieve: {user_intent}"
+    # Get LLM client from config
+    llm_client: Optional[LLMClient] = None
+    if config and "configurable" in config:
+        llm_client = config["configurable"].get("llm_client")
+
+    if not llm_client:
+        raise GraphExecutionError("LLM client not available in config")
+
+    # Generate LLM prompt
+    prompt = create_reasoning_planning_prompt(
+        user_intent, diagnostic_interpretation, issues, current_parameters
+    )
+
+    # Get LLM reasoning
+    llm_output = llm_client.generate(
+        prompt=prompt,
+        system_prompt=REASONING_PLANNING_SYSTEM,
+        temperature=0.5,
+    )
+
+    # Extract strategy and reasoning from output
+    strategy = "See full reasoning"
+    reasoning = llm_output
+
+    # Try to extract strategy section
+    if "Strategy:" in llm_output or "**Strategy**" in llm_output:
+        import re
+        strategy_match = re.search(
+            r"\*\*Strategy\*\*:?\s*(.+?)(?:\n\n|\*\*)", llm_output, re.DOTALL
         )
-    else:
-        strategy = f"Optimize machine parameters to achieve: {user_intent}"
-        reasoning = (
-            f"Machine is operating nominally. Will fine-tune parameters to "
-            f"optimize for user goal: {user_intent}"
-        )
+        if strategy_match:
+            strategy = strategy_match.group(1).strip()
+
+    logger.info("Generated strategy with LLM")
 
     return {
         "strategy": strategy,
@@ -166,75 +206,71 @@ def reasoning_planning_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
-def generate_actions_node(state: AgentState) -> Dict[str, Any]:
-    """Generate specific parameter adjustment actions.
+def generate_actions_node(state: AgentState, config: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Generate specific parameter adjustment actions using LLM.
 
     This node creates concrete actions (parameter changes) based on
     the strategy and current machine state.
 
     Args:
         state: Current agent state
+        config: Config with LLM client and backend (required)
 
     Returns:
         Updated state with proposed_actions
+
+    Raises:
+        GraphExecutionError: If LLM client or backend not available, or if generation fails
     """
-    logger.info("Generating actions")
+    logger.info("Generating actions with LLM")
 
-    # TODO: This will use LLM in Phase 5
-    # For now, generate simple test actions
-
-    user_intent = state.get("user_intent", "").lower()
-    issues = state.get("identified_issues", [])
+    user_intent = state.get("user_intent", "")
+    strategy = state.get("strategy", "")
+    reasoning = state.get("reasoning", "")
     current_params = state.get("current_parameters", {})
 
-    actions = []
+    # Get LLM client and backend from config
+    llm_client: Optional[LLMClient] = None
+    backend: Optional[AcceleratorBackend] = None
+    if config and "configurable" in config:
+        llm_client = config["configurable"].get("llm_client")
+        backend = config["configurable"].get("backend")
 
-    # Simple rule-based action generation
-    if "optimize" in user_intent and "beam size" in user_intent:
-        # Example: optimize beam size by adjusting quadrupoles
-        for param_name, current_value in current_params.items():
-            if "QF" in param_name or "QD" in param_name:
-                # Propose small adjustment
-                proposed_value = current_value + 0.1
-                actions.append({
-                    "parameter_name": param_name,
-                    "current_value": current_value,
-                    "proposed_value": proposed_value,
-                    "rationale": f"Adjust {param_name} to optimize beam size",
-                    "expected_impact": "Reduce beam size at focal point",
-                    "priority": 1,
-                })
-                break  # Only propose one action for now
+    if not llm_client:
+        raise GraphExecutionError("LLM client not available in config")
 
-    elif "correct orbit" in user_intent or any("BPM" in issue for issue in issues):
-        # Correct orbit using correctors
-        for param_name, current_value in current_params.items():
-            if "COR" in param_name or "KICK" in param_name:
-                proposed_value = current_value + 0.05
-                actions.append({
-                    "parameter_name": param_name,
-                    "current_value": current_value,
-                    "proposed_value": proposed_value,
-                    "rationale": f"Adjust {param_name} to correct orbit",
-                    "expected_impact": "Reduce orbit deviation at BPMs",
-                    "priority": 1,
-                })
-                break
+    if not backend:
+        raise GraphExecutionError("Backend not available in config")
 
-    # If no specific actions, propose a generic one
-    if not actions and current_params:
-        first_param = list(current_params.keys())[0]
-        current_value = current_params[first_param]
-        actions.append({
-            "parameter_name": first_param,
-            "current_value": current_value,
-            "proposed_value": current_value + 0.1,
-            "rationale": f"Test adjustment of {first_param}",
-            "expected_impact": "Observe response to parameter change",
-            "priority": 2,
-        })
+    # Build parameter metadata from backend config
+    parameter_metadata = {}
+    for knob in backend.config.knobs:
+        parameter_metadata[knob.name] = {
+            "min": knob.min_value,
+            "max": knob.max_value,
+            "type": knob.element_type,
+            "unit": knob.unit,
+        }
 
-    logger.info(f"Generated {len(actions)} action(s)")
+    # Generate LLM prompt
+    prompt = create_action_generation_prompt(
+        user_intent, strategy, reasoning, current_params, parameter_metadata
+    )
+
+    # Get LLM actions
+    llm_output = llm_client.generate(
+        prompt=prompt,
+        system_prompt=ACTION_GENERATION_SYSTEM,
+        temperature=0.3,  # Lower temperature for parameter choices
+    )
+
+    # Parse actions from output
+    actions = parse_actions_from_llm(llm_output)
+
+    if not actions:
+        raise GraphExecutionError("LLM produced no valid actions")
+
+    logger.info(f"Generated {len(actions)} action(s) with LLM")
 
     return {
         "proposed_actions": actions,
@@ -355,19 +391,23 @@ def execute_action_node(state: AgentState, config: Dict[str, Any]) -> Dict[str, 
         }
 
 
-def verify_results_node(state: AgentState) -> Dict[str, Any]:
-    """Verify results of action execution.
+def verify_results_node(state: AgentState, config: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Verify results of action execution using LLM.
 
     This node analyzes whether the executed action had the desired
     effect on diagnostics.
 
     Args:
         state: Current agent state
+        config: Config with LLM client (required)
 
     Returns:
         Updated state with verification_result
+
+    Raises:
+        GraphExecutionError: If LLM client not available or generation fails
     """
-    logger.info("Verifying results")
+    logger.info("Verifying results with LLM")
 
     execution_result = state.get("current_execution_result")
 
@@ -381,27 +421,55 @@ def verify_results_node(state: AgentState) -> Dict[str, Any]:
             "verification_result": f"Action failed: {execution_result.error}",
         }
 
-    # TODO: More sophisticated verification with LLM in Phase 5
-    # For now, simple check
-
     execution_history = state.get("execution_history", [])
-    if execution_history:
-        latest = execution_history[-1]
-        diags_before = latest["diagnostics_before"]
-        diags_after = latest["diagnostics_after"]
+    if not execution_history:
+        return {
+            "verification_result": "Action executed successfully (no history available)",
+        }
 
-        # Count alarms before and after
-        alarms_before = sum(1 for d in diags_before if d.is_alarm())
-        alarms_after = sum(1 for d in diags_after if d.is_alarm())
+    latest = execution_history[-1]
+    diags_before = latest["diagnostics_before"]
+    diags_after = latest["diagnostics_after"]
+    action = latest["action"]
+    user_intent = state.get("user_intent", "")
 
-        if alarms_after < alarms_before:
-            verification = "Positive result: Reduced alarm count"
-        elif alarms_after > alarms_before:
-            verification = "Negative result: Increased alarm count"
-        else:
-            verification = "Neutral result: No change in alarm count"
-    else:
-        verification = "Action executed successfully"
+    # Get LLM client from config
+    llm_client: Optional[LLMClient] = None
+    if config and "configurable" in config:
+        llm_client = config["configurable"].get("llm_client")
+
+    if not llm_client:
+        raise GraphExecutionError("LLM client not available in config")
+
+    # Create action description
+    action_description = (
+        f"Set {action['parameter_name']} from {action['current_value']:.4f} "
+        f"to {action['proposed_value']:.4f}. "
+        f"Rationale: {action.get('rationale', 'N/A')}"
+    )
+
+    # Generate LLM prompt
+    prompt = create_verification_prompt(
+        action_description, diags_before, diags_after, user_intent
+    )
+
+    # Get LLM verification
+    llm_output = llm_client.generate(
+        prompt=prompt,
+        system_prompt=VERIFICATION_SYSTEM,
+        temperature=0.3,
+    )
+
+    # Parse verification result
+    verification_data = parse_verification_result(llm_output)
+
+    # Store detailed verification
+    verification = (
+        f"{verification_data['assessment']} (effectiveness: {verification_data['effectiveness']}/10) - "
+        f"Recommendation: {verification_data['recommendation']}\n\n{llm_output[:200]}"
+    )
+
+    logger.info(f"LLM verification: {verification_data['assessment']}")
 
     return {
         "verification_result": verification,

@@ -1,0 +1,34 @@
+# Prompt template for diagnostic interpretation
+
+system_prompt: |
+  You are an expert accelerator physicist analyzing diagnostic data from a particle accelerator.
+
+  Your task is to:
+  1. Analyze the provided diagnostic measurements
+  2. Identify any issues, anomalies, or deviations from expected behavior
+  3. Assess the severity of each issue
+  4. Provide clear, concise interpretation
+
+  Focus on physics-based reasoning and practical operational considerations.
+
+user_prompt_template: |
+  # Diagnostic Measurements
+
+  Machine Status: {machine_status_summary}
+
+  ## Current Diagnostics
+  {diagnostics_list}
+
+  ## Your Task
+  Analyze these diagnostic measurements and provide:
+
+  1. **Overall Assessment**: Summarize the machine state in 1-2 sentences
+
+  2. **Identified Issues**: List specific issues that need attention (if any):
+     - Issue description
+     - Severity (CRITICAL, MAJOR, MINOR)
+     - Affected diagnostics
+
+  3. **Interpretation**: Explain what these measurements indicate about machine performance
+
+  Provide your analysis in clear, structured format.

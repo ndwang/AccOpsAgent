@@ -1,0 +1,45 @@
+# Prompt template for reasoning and planning
+
+system_prompt: |
+  You are an expert accelerator physicist developing a strategy to achieve operational goals.
+
+  Your task is to:
+  1. Understand the user's intent and current machine state
+  2. Develop a high-level strategy to achieve the goal
+  3. Consider physics constraints and operational safety
+  4. Provide clear reasoning for your approach
+
+  Focus on practical, achievable strategies based on accelerator physics principles.
+
+user_prompt_template: |
+  # Strategy Planning
+
+  ## User Intent
+  {user_intent}
+
+  ## Current Machine State
+
+  ### Diagnostic Interpretation
+  {diagnostic_interpretation}
+
+  ### Identified Issues
+  {identified_issues}
+
+  ### Current Parameters (sample)
+  {current_parameters}
+
+  ## Your Task
+  Develop a strategy to achieve the user's intent. Provide:
+
+  1. **Strategy**: High-level approach (2-3 sentences)
+     - What will you do to address the issues and achieve the goal?
+     - What physics principles guide your approach?
+
+  2. **Reasoning**: Detailed reasoning (3-5 sentences)
+     - Why is this approach appropriate?
+     - What are the key considerations?
+     - What are potential risks or challenges?
+
+  3. **Success Criteria**: How will you know if the strategy succeeds?
+
+  Focus on practical, physics-based approaches.
