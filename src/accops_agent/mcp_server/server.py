@@ -392,8 +392,9 @@ class PyTaoMCPServer:
                     "diagnostics_count": len(self.config.diagnostics),
                 }
             else:
+                error_msg = self.backend.connection.last_error or "Unknown error"
                 self.backend = None
-                return {"success": False, "error": "Failed to initialize Tao connection"}
+                return {"success": False, "error": f"Failed to initialize Tao: {error_msg}"}
 
         except Exception as e:
             self.backend = None

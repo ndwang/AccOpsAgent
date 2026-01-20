@@ -309,7 +309,8 @@ Examples:
         print_info(f"Initializing MCP backend with config: {args.config}...")
         backend = MCPBackend(config_path=args.config)
         if not backend.initialize():
-            raise RuntimeError("Failed to initialize MCP backend")
+            print_error("Failed to initialize MCP backend (see error above for details)")
+            sys.exit(1)
         print_success(f"Connected to MCP server: {backend.config.name}")
         print_info(f"  Knobs: {len(backend.config.knobs)}")
         print_info(f"  Diagnostics: {len(backend.config.diagnostics)}")

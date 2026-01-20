@@ -30,15 +30,18 @@ class TaoConnection:
         self.init_file = init_file
         self.tao: Optional[Tao] = None
         self._connected = False
+        self.last_error: Optional[str] = None
 
     def connect(self) -> bool:
         """Establish connection to Tao."""
+        self.last_error = None
         try:
             if self.init_file:
                 # Verify init file exists
                 init_path = Path(self.init_file)
                 if not init_path.exists():
-                    logger.error(f"Init file not found: {self.init_file}")
+                    self.last_error = f"Init file not found: {self.init_file}"
+                    logger.error(self.last_error)
                     return False
 
                 # Initialize Tao with init file
@@ -54,6 +57,7 @@ class TaoConnection:
             return True
 
         except Exception as e:
+            self.last_error = str(e)
             logger.error(f"Failed to connect to Tao: {e}")
             self._connected = False
             return False
