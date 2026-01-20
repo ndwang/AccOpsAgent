@@ -297,7 +297,7 @@ class TestConstraintChecker:
 
     def test_max_simultaneous_constraint(self, checker):
         """Test max simultaneous changes constraint."""
-        # Config has max_knobs: 2, so 3 actions should fail
+        # Config has max_knobs: 3, so 4 actions should fail
         actions = [
             ProposedAction(
                 parameter_name="QF1_K1",
@@ -313,6 +313,12 @@ class TestConstraintChecker:
             ),
             ProposedAction(
                 parameter_name="HCOR1_KICK",
+                current_value=0.0,
+                proposed_value=0.0001,
+                rationale="Test",
+            ),
+            ProposedAction(
+                parameter_name="VCOR1_KICK",
                 current_value=0.0,
                 proposed_value=0.0001,
                 rationale="Test",

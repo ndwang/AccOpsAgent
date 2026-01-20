@@ -85,8 +85,7 @@ def ingest_diagnostics_node(state: AgentState, config: RunnableConfig) -> Dict[s
     except Exception as e:
         logger.error(f"Failed to ingest diagnostics: {e}")
         return {
-            "error": str(e),
-            "error_type": "diagnostic_read_error",
+            "error": {"message": str(e), "type": "diagnostic_read_error"},
         }
 
 
@@ -101,7 +100,7 @@ def interpret_diagnostics_node(state: AgentState, config: RunnableConfig | None 
         config: Config with LLM client (required)
 
     Returns:
-        Updated state with diagnostic_interpretation and identified_issues
+        Updated state with analysis.interpretation and analysis.issues
 
     Raises:
         GraphExecutionError: If LLM client not available or generation fails
@@ -110,11 +109,15 @@ def interpret_diagnostics_node(state: AgentState, config: RunnableConfig | None 
 
     diagnostics = state.get("current_diagnostics", [])
     machine_status_summary = state.get("machine_status_summary", "Unknown")
+    current_analysis = state.get("analysis", {})
 
     if not diagnostics:
         return {
-            "diagnostic_interpretation": "No diagnostic data available",
-            "identified_issues": ["No diagnostics available"],
+            "analysis": {
+                **current_analysis,
+                "interpretation": "No diagnostic data available",
+                "issues": ["No diagnostics available"],
+            },
         }
 
     # Get LLM client from config
@@ -141,8 +144,11 @@ def interpret_diagnostics_node(state: AgentState, config: RunnableConfig | None 
     logger.info(f"LLM identified {len(issues)} issue(s)")
 
     return {
-        "diagnostic_interpretation": interpretation,
-        "identified_issues": issues,
+        "analysis": {
+            **current_analysis,
+            "interpretation": interpretation,
+            "issues": issues,
+        },
     }
 
 
@@ -157,7 +163,7 @@ def reasoning_planning_node(state: AgentState, config: RunnableConfig | None = N
         config: Config with LLM client (required)
 
     Returns:
-        Updated state with strategy and reasoning
+        Updated state with analysis.strategy and analysis.reasoning
 
     Raises:
         GraphExecutionError: If LLM client not available or generation fails
@@ -165,14 +171,18 @@ def reasoning_planning_node(state: AgentState, config: RunnableConfig | None = N
     logger.info("Generating strategy and reasoning with LLM")
 
     user_intent = state.get("user_intent", "")
-    diagnostic_interpretation = state.get("diagnostic_interpretation", "")
-    issues = state.get("identified_issues", [])
+    current_analysis = state.get("analysis", {})
+    diagnostic_interpretation = current_analysis.get("interpretation", "")
+    issues = current_analysis.get("issues", [])
     current_parameters = state.get("current_parameters", {})
 
     if not user_intent:
         return {
-            "strategy": "No user intent specified",
-            "reasoning": "Cannot plan without user goal",
+            "analysis": {
+                **current_analysis,
+                "strategy": "No user intent specified",
+                "reasoning": "Cannot plan without user goal",
+            },
         }
 
     # Get LLM client from config
@@ -210,8 +220,11 @@ def reasoning_planning_node(state: AgentState, config: RunnableConfig | None = N
     logger.info("Generated strategy with LLM")
 
     return {
-        "strategy": strategy,
-        "reasoning": reasoning,
+        "analysis": {
+            **current_analysis,
+            "strategy": strategy,
+            "reasoning": reasoning,
+        },
     }
 
 
@@ -235,8 +248,9 @@ def generate_actions_node(state: AgentState, config: RunnableConfig | None = Non
     logger.info("Generating actions with LLM")
 
     user_intent = state.get("user_intent", "")
-    strategy = state.get("strategy", "")
-    reasoning = state.get("reasoning", "")
+    current_analysis = state.get("analysis", {})
+    strategy = current_analysis.get("strategy", "")
+    reasoning = current_analysis.get("reasoning", "")
     current_params = state.get("current_parameters", {})
     current_diagnostics = state.get("current_diagnostics", [])
 
@@ -316,8 +330,10 @@ def generate_actions_node(state: AgentState, config: RunnableConfig | None = Non
                     "proposed_actions": [],
                     "action_index": 0,
                     "safety_violations": safety_violations,
-                    "error": "Safety constraints violated - actions rejected",
-                    "error_type": "safety_violation",
+                    "error": {
+                        "message": "Safety constraints violated - actions rejected",
+                        "type": "safety_violation",
+                    },
                 }
 
         actions = valid_actions
@@ -328,8 +344,10 @@ def generate_actions_node(state: AgentState, config: RunnableConfig | None = Non
             "proposed_actions": [],
             "action_index": 0,
             "safety_violations": safety_violations,
-            "error": "All proposed actions failed safety validation",
-            "error_type": "safety_violation",
+            "error": {
+                "message": "All proposed actions failed safety validation",
+                "type": "safety_violation",
+            },
         }
 
     logger.info(f"{len(actions)} action(s) passed safety validation")
@@ -351,24 +369,31 @@ def human_approval_node(state: AgentState) -> Dict[str, Any]:
         state: Current agent state with proposed_actions
 
     Returns:
-        Updated state with awaiting_approval flag
+        Updated state with workflow.awaiting_approval flag
     """
     logger.info("Requesting human approval")
 
     proposed_actions = state.get("proposed_actions", [])
+    current_workflow = state.get("workflow", {})
 
     if not proposed_actions:
         logger.warning("No actions to approve")
         return {
-            "awaiting_approval": False,
-            "approval_status": "no_actions",
+            "workflow": {
+                **current_workflow,
+                "awaiting_approval": False,
+                "approval_status": "no_actions",
+            },
         }
 
     logger.info(f"Awaiting approval for {len(proposed_actions)} action(s)")
 
     return {
-        "awaiting_approval": True,
-        "approval_status": "pending",
+        "workflow": {
+            **current_workflow,
+            "awaiting_approval": True,
+            "approval_status": "pending",
+        },
     }
 
 
@@ -399,8 +424,7 @@ def execute_action_node(state: AgentState, config: RunnableConfig) -> Dict[str, 
 
         if not proposed_actions or action_index >= len(proposed_actions):
             return {
-                "error": "No action to execute",
-                "error_type": "invalid_action_index",
+                "error": {"message": "No action to execute", "type": "invalid_action_index"},
             }
 
         action = proposed_actions[action_index]
@@ -417,8 +441,10 @@ def execute_action_node(state: AgentState, config: RunnableConfig) -> Dict[str, 
             error_msgs = "; ".join(validation_result.error_messages)
             logger.error(f"Final safety check failed: {error_msgs}")
             return {
-                "error": f"Safety check failed before execution: {error_msgs}",
-                "error_type": "safety_violation",
+                "error": {
+                    "message": f"Safety check failed before execution: {error_msgs}",
+                    "type": "safety_violation",
+                },
                 "safety_violations": validation_result.error_messages,
             }
 
@@ -461,21 +487,18 @@ def execute_action_node(state: AgentState, config: RunnableConfig) -> Dict[str, 
             logger.error(f"Action execution failed: {result.error}")
             return {
                 "current_execution_result": result,
-                "error": result.error,
-                "error_type": "execution_failed",
+                "error": {"message": result.error, "type": "execution_failed"},
             }
 
     except ConstraintViolationError as e:
         logger.error(f"Safety constraint violation: {e}")
         return {
-            "error": str(e),
-            "error_type": "safety_violation",
+            "error": {"message": str(e), "type": "safety_violation"},
         }
     except Exception as e:
         logger.error(f"Exception during action execution: {e}")
         return {
-            "error": str(e),
-            "error_type": "execution_exception",
+            "error": {"message": str(e), "type": "execution_exception"},
         }
 
 
@@ -574,20 +597,24 @@ def decide_continuation_node(state: AgentState) -> Dict[str, Any]:
         state: Current agent state
 
     Returns:
-        Updated state with goal_achieved and continue_optimization flags
+        Updated state with workflow.goal_achieved and workflow.continue_optimization flags
     """
     logger.info("Deciding continuation")
 
-    iteration_count = state.get("iteration_count", 0) + 1
-    max_iterations = state.get("max_iterations", DEFAULT_MAX_ITERATIONS)
+    current_workflow = state.get("workflow", {})
+    iteration_count = current_workflow.get("iteration_count", 0) + 1
+    max_iterations = current_workflow.get("max_iterations", DEFAULT_MAX_ITERATIONS)
 
     # Check if max iterations reached
     if iteration_count >= max_iterations:
         logger.info(f"Reached max iterations ({max_iterations})")
         return {
-            "goal_achieved": False,
-            "continue_optimization": False,
-            "iteration_count": iteration_count,
+            "workflow": {
+                **current_workflow,
+                "goal_achieved": False,
+                "continue_optimization": False,
+                "iteration_count": iteration_count,
+            },
         }
 
     # TODO: Use LLM to assess goal achievement in Phase 5
@@ -599,15 +626,21 @@ def decide_continuation_node(state: AgentState) -> Dict[str, Any]:
     if alarm_count == 0:
         logger.info("Goal achieved: No alarms present")
         return {
-            "goal_achieved": True,
-            "continue_optimization": False,
-            "iteration_count": iteration_count,
+            "workflow": {
+                **current_workflow,
+                "goal_achieved": True,
+                "continue_optimization": False,
+                "iteration_count": iteration_count,
+            },
         }
 
     # Continue if issues remain and under iteration limit
     logger.info(f"Continuing optimization (iteration {iteration_count}/{max_iterations})")
     return {
-        "goal_achieved": False,
-        "continue_optimization": True,
-        "iteration_count": iteration_count,
+        "workflow": {
+            **current_workflow,
+            "goal_achieved": False,
+            "continue_optimization": True,
+            "iteration_count": iteration_count,
+        },
     }

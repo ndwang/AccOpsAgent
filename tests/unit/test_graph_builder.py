@@ -57,7 +57,7 @@ class TestRoutingFunctions:
     def test_route_after_approval_approved(self):
         """Test routing when actions are approved."""
         state = create_initial_state("Test")
-        state["approval_status"] = "approved"
+        state["workflow"]["approval_status"] = "approved"
 
         result = route_after_approval(state)
 
@@ -66,7 +66,7 @@ class TestRoutingFunctions:
     def test_route_after_approval_rejected(self):
         """Test routing when actions are rejected."""
         state = create_initial_state("Test")
-        state["approval_status"] = "rejected"
+        state["workflow"]["approval_status"] = "rejected"
 
         result = route_after_approval(state)
 
@@ -75,7 +75,7 @@ class TestRoutingFunctions:
     def test_route_after_approval_modified(self):
         """Test routing when actions are modified."""
         state = create_initial_state("Test")
-        state["approval_status"] = "modified"
+        state["workflow"]["approval_status"] = "modified"
 
         result = route_after_approval(state)
 
@@ -84,7 +84,7 @@ class TestRoutingFunctions:
     def test_route_after_approval_no_actions(self):
         """Test routing with no_actions status."""
         state = create_initial_state("Test")
-        state["approval_status"] = "no_actions"
+        state["workflow"]["approval_status"] = "no_actions"
 
         result = route_after_approval(state)
 
@@ -93,8 +93,8 @@ class TestRoutingFunctions:
     def test_route_after_continuation_goal_achieved(self):
         """Test routing when goal is achieved."""
         state = create_initial_state("Test")
-        state["goal_achieved"] = True
-        state["continue_optimization"] = False
+        state["workflow"]["goal_achieved"] = True
+        state["workflow"]["continue_optimization"] = False
 
         result = route_after_continuation(state)
 
@@ -103,8 +103,8 @@ class TestRoutingFunctions:
     def test_route_after_continuation_continue(self):
         """Test routing when continuing optimization."""
         state = create_initial_state("Test")
-        state["goal_achieved"] = False
-        state["continue_optimization"] = True
+        state["workflow"]["goal_achieved"] = False
+        state["workflow"]["continue_optimization"] = True
 
         result = route_after_continuation(state)
 
@@ -113,8 +113,8 @@ class TestRoutingFunctions:
     def test_route_after_continuation_stop(self):
         """Test routing when stopping optimization."""
         state = create_initial_state("Test")
-        state["goal_achieved"] = False
-        state["continue_optimization"] = False
+        state["workflow"]["goal_achieved"] = False
+        state["workflow"]["continue_optimization"] = False
 
         result = route_after_continuation(state)
 
@@ -123,7 +123,7 @@ class TestRoutingFunctions:
     def test_route_after_ingest_success(self):
         """Test routing after successful ingestion."""
         state = create_initial_state("Test")
-        state["error"] = None
+        # error is already empty dict by default
 
         result = route_after_ingest(state)
 
@@ -132,7 +132,7 @@ class TestRoutingFunctions:
     def test_route_after_ingest_error(self):
         """Test routing after ingestion error."""
         state = create_initial_state("Test")
-        state["error"] = "Connection failed"
+        state["error"] = {"message": "Connection failed", "type": "connection_error"}
 
         result = route_after_ingest(state)
 

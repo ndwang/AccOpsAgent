@@ -41,7 +41,8 @@ def route_after_approval(state: AgentState) -> Literal["execute_action", "genera
     Returns:
         Next node name based on approval status
     """
-    approval_status = state.get("approval_status", "")
+    workflow = state.get("workflow", {})
+    approval_status = workflow.get("approval_status", "")
 
     if approval_status == "approved":
         logger.info("Actions approved, proceeding to execution")
@@ -64,8 +65,9 @@ def route_after_continuation(state: AgentState) -> Literal["ingest_diagnostics",
     Returns:
         Next node name based on continuation decision
     """
-    continue_opt = state.get("continue_optimization", False)
-    goal_achieved = state.get("goal_achieved", False)
+    workflow = state.get("workflow", {})
+    continue_opt = workflow.get("continue_optimization", False)
+    goal_achieved = workflow.get("goal_achieved", False)
 
     if goal_achieved:
         logger.info("Goal achieved, ending workflow")
@@ -87,9 +89,9 @@ def route_after_ingest(state: AgentState) -> Literal["interpret_diagnostics", "_
     Returns:
         Next node name, or END if error occurred
     """
-    error = state.get("error")
-    if error:
-        logger.error(f"Error during ingestion: {error}")
+    error = state.get("error") or {}
+    if isinstance(error, dict) and error.get("message"):
+        logger.error(f"Error during ingestion: {error.get('message')}")
         return END
 
     return INTERPRET_DIAGNOSTICS

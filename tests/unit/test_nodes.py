@@ -101,7 +101,7 @@ class TestIngestDiagnosticsNode:
         result = ingest_diagnostics_node(state, node_config)
 
         assert "error" in result
-        assert result["error_type"] == "diagnostic_read_error"
+        assert result["error"]["type"] == "diagnostic_read_error"
 
 
 class TestInterpretDiagnosticsNode:
@@ -112,9 +112,10 @@ class TestInterpretDiagnosticsNode:
         state = create_initial_state("Test")
         result = interpret_diagnostics_node(state)
 
-        assert "diagnostic_interpretation" in result
-        assert "identified_issues" in result
-        assert "No diagnostic" in result["diagnostic_interpretation"]
+        assert "analysis" in result
+        assert "interpretation" in result["analysis"]
+        assert "issues" in result["analysis"]
+        assert "No diagnostic" in result["analysis"]["interpretation"]
 
     def test_interpret_requires_llm_client(self, mock_backend):
         """Test that interpretation requires LLM client."""
@@ -134,8 +135,9 @@ class TestInterpretDiagnosticsNode:
 
         result = interpret_diagnostics_node(state, node_config_with_llm)
 
-        assert "diagnostic_interpretation" in result
-        assert "identified_issues" in result
+        assert "analysis" in result
+        assert "interpretation" in result["analysis"]
+        assert "issues" in result["analysis"]
         mock_llm_client.generate.assert_called_once()
 
     def test_interpret_with_alarms(self, mock_backend, node_config_with_llm, mock_llm_client):
@@ -149,8 +151,9 @@ class TestInterpretDiagnosticsNode:
 
         result = interpret_diagnostics_node(state, node_config_with_llm)
 
-        assert "identified_issues" in result
-        assert "diagnostic_interpretation" in result
+        assert "analysis" in result
+        assert "issues" in result["analysis"]
+        assert "interpretation" in result["analysis"]
         mock_llm_client.generate.assert_called_once()
 
 
@@ -163,13 +166,14 @@ class TestReasoningPlanningNode:
         state["user_intent"] = ""
         result = reasoning_planning_node(state)
 
-        assert "strategy" in result
-        assert "reasoning" in result
+        assert "analysis" in result
+        assert "strategy" in result["analysis"]
+        assert "reasoning" in result["analysis"]
 
     def test_reasoning_requires_llm_client(self):
         """Test that reasoning requires LLM client."""
         state = create_initial_state("Optimize beam size")
-        state["identified_issues"] = []
+        state["analysis"]["issues"] = []
 
         with pytest.raises(GraphExecutionError):
             reasoning_planning_node(state)
@@ -179,12 +183,13 @@ class TestReasoningPlanningNode:
         mock_llm_client.generate.return_value = "**Strategy**: Optimize beam size by adjusting quadrupole strengths.\n\n**Reasoning**: Focus on beam optics."
 
         state = create_initial_state("Optimize beam size")
-        state["identified_issues"] = []
+        state["analysis"]["issues"] = []
 
         result = reasoning_planning_node(state, node_config_with_llm)
 
-        assert "strategy" in result
-        assert "reasoning" in result
+        assert "analysis" in result
+        assert "strategy" in result["analysis"]
+        assert "reasoning" in result["analysis"]
         mock_llm_client.generate.assert_called_once()
 
     def test_reasoning_with_issues(self, node_config_with_llm, mock_llm_client):
@@ -192,12 +197,13 @@ class TestReasoningPlanningNode:
         mock_llm_client.generate.return_value = "**Strategy**: Address the issue with BPM1_X.\n\n**Reasoning**: Correct the orbit deviation."
 
         state = create_initial_state("Correct orbit")
-        state["identified_issues"] = ["BPM1_X: ALARM - Large deviation"]
+        state["analysis"]["issues"] = ["BPM1_X: ALARM - Large deviation"]
 
         result = reasoning_planning_node(state, node_config_with_llm)
 
-        assert "strategy" in result
-        assert "reasoning" in result
+        assert "analysis" in result
+        assert "strategy" in result["analysis"]
+        assert "reasoning" in result["analysis"]
         mock_llm_client.generate.assert_called_once()
 
 
@@ -247,7 +253,7 @@ class TestGenerateActionsNode:
             "HCOR1_KICK": 0.0,
             "VCOR1_KICK": 0.0,
         }
-        state["identified_issues"] = ["BPM1_X: Large deviation"]
+        state["analysis"]["issues"] = ["BPM1_X: Large deviation"]
 
         result = generate_actions_node(state, node_config_with_llm)
 
@@ -294,10 +300,9 @@ class TestHumanApprovalNode:
 
         result = human_approval_node(state)
 
-        assert "awaiting_approval" in result
-        assert result["awaiting_approval"] is True
-        assert "approval_status" in result
-        assert result["approval_status"] == "pending"
+        assert "workflow" in result
+        assert result["workflow"]["awaiting_approval"] is True
+        assert result["workflow"]["approval_status"] == "pending"
 
     def test_approval_without_actions(self):
         """Test approval node with no actions."""
@@ -306,9 +311,9 @@ class TestHumanApprovalNode:
 
         result = human_approval_node(state)
 
-        assert "awaiting_approval" in result
-        assert result["awaiting_approval"] is False
-        assert result["approval_status"] == "no_actions"
+        assert "workflow" in result
+        assert result["workflow"]["awaiting_approval"] is False
+        assert result["workflow"]["approval_status"] == "no_actions"
 
 
 class TestExecuteActionNode:
@@ -358,7 +363,7 @@ class TestExecuteActionNode:
 
         # Safety check should block execution
         assert "error" in result
-        assert result["error_type"] == "safety_violation"
+        assert result["error"]["type"] == "safety_violation"
         assert "safety_violations" in result
 
     def test_execute_action_rate_limit_violation(self, mock_backend, node_config):
@@ -380,8 +385,8 @@ class TestExecuteActionNode:
 
         # Safety check should block execution
         assert "error" in result
-        assert result["error_type"] == "safety_violation"
-        assert "rate limit" in result["error"].lower()
+        assert result["error"]["type"] == "safety_violation"
+        assert "rate limit" in result["error"]["message"].lower()
 
     def test_execute_action_no_actions(self, mock_backend, node_config):
         """Test execution with no actions."""
@@ -391,7 +396,7 @@ class TestExecuteActionNode:
         result = execute_action_node(state, node_config)
 
         assert "error" in result
-        assert result["error_type"] == "invalid_action_index"
+        assert result["error"]["type"] == "invalid_action_index"
 
     def test_execute_action_backend_not_connected(self, mock_backend, node_config):
         """Test execution when backend not connected."""
@@ -520,28 +525,27 @@ class TestDecideContinuationNode:
     def test_decide_max_iterations_reached(self):
         """Test decision when max iterations reached."""
         state = create_initial_state("Test")
-        state["iteration_count"] = 9
-        state["max_iterations"] = 10
+        state["workflow"]["iteration_count"] = 9
+        state["workflow"]["max_iterations"] = 10
 
         result = decide_continuation_node(state)
 
-        assert "goal_achieved" in result
-        assert "continue_optimization" in result
-        assert result["continue_optimization"] is False
-        assert result["iteration_count"] == 10
+        assert "workflow" in result
+        assert result["workflow"]["continue_optimization"] is False
+        assert result["workflow"]["iteration_count"] == 10
 
     def test_decide_no_alarms(self, mock_backend):
         """Test decision when no alarms present."""
         state = create_initial_state("Test")
         state["current_diagnostics"] = mock_backend.read_all_diagnostics()
-        state["iteration_count"] = 0
-        state["max_iterations"] = 10
+        state["workflow"]["iteration_count"] = 0
+        state["workflow"]["max_iterations"] = 10
 
         result = decide_continuation_node(state)
 
-        assert "goal_achieved" in result
-        assert result["goal_achieved"] is True
-        assert result["continue_optimization"] is False
+        assert "workflow" in result
+        assert result["workflow"]["goal_achieved"] is True
+        assert result["workflow"]["continue_optimization"] is False
 
     def test_decide_continue_with_issues(self, mock_backend):
         """Test decision to continue when issues remain."""
@@ -549,11 +553,11 @@ class TestDecideContinuationNode:
 
         state = create_initial_state("Test")
         state["current_diagnostics"] = mock_backend.read_all_diagnostics()
-        state["iteration_count"] = 0
-        state["max_iterations"] = 10
+        state["workflow"]["iteration_count"] = 0
+        state["workflow"]["max_iterations"] = 10
 
         result = decide_continuation_node(state)
 
-        assert "continue_optimization" in result
-        assert result["continue_optimization"] is True
-        assert result["goal_achieved"] is False
+        assert "workflow" in result
+        assert result["workflow"]["continue_optimization"] is True
+        assert result["workflow"]["goal_achieved"] is False

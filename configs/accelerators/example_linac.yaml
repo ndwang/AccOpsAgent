@@ -155,7 +155,7 @@ constraints:
     description: "Maximum number of knobs that can be changed simultaneously"
     constraint_type: "limit"
     parameters:
-      max_knobs: 2
+      max_knobs: 3
     enabled: true
 
 metadata:

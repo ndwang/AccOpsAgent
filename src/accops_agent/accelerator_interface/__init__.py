@@ -3,6 +3,7 @@
 from .data_models import ActionResult, DiagnosticSnapshot, DiagnosticStatus, ParameterValue
 from .interfaces import AcceleratorBackend, ControlProvider, DiagnosticProvider
 from .mcp_backend import MCPBackend
+from .mock_backend import MockBackend
 
 __all__ = [
     "ActionResult",
@@ -13,4 +14,5 @@ __all__ = [
     "ControlProvider",
     "DiagnosticProvider",
     "MCPBackend",
+    "MockBackend",
 ]

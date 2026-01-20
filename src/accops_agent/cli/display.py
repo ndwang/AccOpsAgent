@@ -235,32 +235,36 @@ def format_state_summary(state: AgentState) -> str:
         lines.append(f"\n{Colors.CYAN}Diagnostics:{Colors.RESET}")
         lines.append(f"  {format_diagnostic_summary(diagnostics)}")
 
+    # Get analysis state
+    analysis = state.get("analysis", {})
+
     # Interpretation
-    if state.get("diagnostic_interpretation"):
-        interp = state["diagnostic_interpretation"]
+    if analysis.get("interpretation"):
+        interp = analysis["interpretation"]
         if len(interp) > 200:
             interp = interp[:200] + "..."
         lines.append(f"\n{Colors.CYAN}Interpretation:{Colors.RESET}")
         lines.append(f"  {interp}")
 
     # Identified issues
-    issues = state.get("identified_issues", [])
+    issues = analysis.get("issues", [])
     if issues:
         lines.append(f"\n{Colors.CYAN}Identified Issues:{Colors.RESET}")
         for issue in issues[:5]:  # Limit to 5 issues
             lines.append(f"  - {issue}")
 
     # Strategy
-    if state.get("strategy"):
-        strategy = state["strategy"]
+    if analysis.get("strategy"):
+        strategy = analysis["strategy"]
         if len(strategy) > 150:
             strategy = strategy[:150] + "..."
         lines.append(f"\n{Colors.CYAN}Strategy:{Colors.RESET}")
         lines.append(f"  {strategy}")
 
-    # Iteration info
-    iteration = state.get("iteration_count", 0)
-    max_iter = state.get("max_iterations", 10)
+    # Get workflow state for iteration info
+    workflow = state.get("workflow", {})
+    iteration = workflow.get("iteration_count", 0)
+    max_iter = workflow.get("max_iterations", 10)
     lines.append(f"\n{Colors.DIM}Iteration: {iteration}/{max_iter}{Colors.RESET}")
 
     return "\n".join(lines)

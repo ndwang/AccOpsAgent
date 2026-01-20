@@ -30,6 +30,12 @@ uv run python scripts/run_agent.py \
     --backend mock \
     --model gpt-4 \
     --intent "Minimize horizontal beam size"
+
+# Run with LangSmith tracing enabled (requires LANGCHAIN_API_KEY)
+uv run python scripts/run_agent.py \
+    --config configs/accelerators/example_linac.yaml \
+    --backend mock \
+    --trace
 ```
 
 ## Architecture
@@ -100,6 +106,47 @@ Human-in-the-loop interface with colored output, action display, and approval pr
 
 - `OPENAI_API_KEY` - API key for LLM
 - `OPENAI_BASE_URL` - Custom endpoint for OpenAI-compatible APIs (optional)
+- `LANGCHAIN_API_KEY` or `LANGSMITH_API_KEY` - API key for LangSmith tracing (optional, required for `--trace`)
+
+## LangSmith Tracing
+
+The agent supports [LangSmith](https://smith.langchain.com) integration for full observability of the LangGraph workflow. This provides:
+
+- Visual graph execution traces
+- Full state at each node (diagnostics, reasoning, strategies, actions)
+- LLM inputs/outputs for each call
+- Timing metrics and token usage
+- Debugging and replay capabilities
+
+### Setup
+
+1. Create a free account at https://smith.langchain.com
+2. Generate an API key at https://smith.langchain.com/settings
+3. Set the environment variable (either name works):
+   ```bash
+   export LANGSMITH_API_KEY="lsv2_pt_..."
+   # or
+   export LANGCHAIN_API_KEY="lsv2_pt_..."
+   ```
+
+### Usage
+
+```bash
+# Enable tracing with default project name "accops-agent"
+uv run python scripts/run_agent.py \
+    --config configs/accelerators/example_linac.yaml \
+    --backend mock \
+    --trace
+
+# Enable tracing with custom project name
+uv run python scripts/run_agent.py \
+    --config configs/accelerators/example_linac.yaml \
+    --backend mock \
+    --trace \
+    --trace-project "my-experiment"
+```
+
+View traces at https://smith.langchain.com after running with `--trace`.
 
 ## MCP Server (src/accops_agent/mcp_server/)
 

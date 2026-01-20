@@ -345,7 +345,7 @@ class TestFormatStateSummary:
     def test_format_state_with_issues(self):
         """Test formatting state with identified issues."""
         state = create_initial_state("Optimize beam")
-        state["identified_issues"] = ["Issue 1", "Issue 2"]
+        state["analysis"]["issues"] = ["Issue 1", "Issue 2"]
         formatted = format_state_summary(state)
         assert "Issue 1" in formatted
         assert "Issue 2" in formatted

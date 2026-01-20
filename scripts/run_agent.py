@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -35,7 +36,8 @@ from accops_agent.cli import (
     print_warning,
 )
 from accops_agent.cli.input_handler import ApprovalStatus
-from accops_agent.accelerator_interface import MCPBackend
+from accops_agent.accelerator_interface import MCPBackend, MockBackend
+from accops_agent.config import load_accelerator_config
 from accops_agent.graph import (
     HUMAN_APPROVAL,
     build_graph,
@@ -59,6 +61,38 @@ def setup_logging(log_level: str) -> None:
             logging.StreamHandler(sys.stderr),
         ],
     )
+
+
+def setup_langsmith_tracing(project_name: str = "accops-agent") -> bool:
+    """Configure LangSmith tracing for LangGraph observability.
+
+    Args:
+        project_name: LangSmith project name for organizing traces
+
+    Returns:
+        True if tracing was enabled successfully, False otherwise
+    """
+    api_key = os.environ.get("LANGCHAIN_API_KEY") or os.environ.get("LANGSMITH_API_KEY")
+
+    if not api_key:
+        print_warning(
+            "LangSmith tracing requested but no API key found. "
+            "Set LANGSMITH_API_KEY or LANGCHAIN_API_KEY environment variable."
+        )
+        print_info("Get your API key at: https://smith.langchain.com/settings")
+        return False
+
+    # Enable LangSmith tracing
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_PROJECT"] = project_name
+
+    # Ensure API key is set with the expected variable name
+    if not os.environ.get("LANGCHAIN_API_KEY"):
+        os.environ["LANGCHAIN_API_KEY"] = api_key
+
+    print_success(f"LangSmith tracing enabled (project: {project_name})")
+    print_info("View traces at: https://smith.langchain.com")
+    return True
 
 
 def run_agent_loop(
@@ -105,10 +139,11 @@ def run_agent_loop(
                 if diag_count > 0 and not current_state.get("_shown_diag"):
                     print_info(f"Read {diag_count} diagnostics")
 
-            if current_state.get("diagnostic_interpretation") and not current_state.get("_shown_interp"):
+            analysis = current_state.get("analysis", {})
+            if analysis.get("interpretation") and not current_state.get("_shown_interp"):
                 print_info("Diagnostics interpreted")
 
-            if current_state.get("strategy") and not current_state.get("_shown_strategy"):
+            if analysis.get("strategy") and not current_state.get("_shown_strategy"):
                 print_info("Strategy generated")
 
             if current_state.get("proposed_actions") and not current_state.get("_shown_actions"):
@@ -120,15 +155,17 @@ def run_agent_loop(
         raise
 
     # Check if we hit the interrupt (human approval needed)
-    if current_state and current_state.get("awaiting_approval"):
+    workflow = current_state.get("workflow", {}) if current_state else {}
+    if current_state and workflow.get("awaiting_approval"):
         return handle_approval_loop(compiled_graph, current_state, run_config)
 
     # If no interrupt, check final state
     if current_state:
-        if current_state.get("goal_achieved"):
+        error = current_state.get("error", {})
+        if workflow.get("goal_achieved"):
             print_success("Goal achieved!")
-        elif current_state.get("error"):
-            print_error(f"Workflow ended with error: {current_state['error']}")
+        elif error.get("message"):
+            print_error(f"Workflow ended with error: {error['message']}")
         else:
             print_info("Workflow completed.")
 
@@ -163,23 +200,33 @@ def handle_approval_loop(compiled_graph, state: dict, config: dict) -> dict:
         approval = get_user_approval(proposed_actions)
 
         # Update state based on approval
+        current_workflow = current_state.get("workflow", {})
         if approval.status == ApprovalStatus.APPROVED:
             update = {
-                "approval_status": "approved",
-                "awaiting_approval": False,
+                "workflow": {
+                    **current_workflow,
+                    "approval_status": "approved",
+                    "awaiting_approval": False,
+                },
             }
         elif approval.status == ApprovalStatus.REJECTED:
             update = {
-                "approval_status": "rejected",
-                "awaiting_approval": False,
+                "workflow": {
+                    **current_workflow,
+                    "approval_status": "rejected",
+                    "awaiting_approval": False,
+                },
             }
             print_info("Workflow ended by user.")
             return {**current_state, **update}
         else:  # MODIFIED
             update = {
-                "approval_status": "modified",
-                "awaiting_approval": False,
-                "user_feedback": approval.feedback or "",
+                "workflow": {
+                    **current_workflow,
+                    "approval_status": "modified",
+                    "awaiting_approval": False,
+                    "user_feedback": approval.feedback or "",
+                },
             }
 
         # Resume graph with updated state
@@ -203,22 +250,24 @@ def handle_approval_loop(compiled_graph, state: dict, config: dict) -> dict:
             return current_state
 
         # Check if we need another approval (modified flow)
-        if current_state.get("awaiting_approval"):
+        workflow = current_state.get("workflow", {})
+        if workflow.get("awaiting_approval"):
             continue
 
         # Check if we're done
-        if current_state.get("goal_achieved"):
+        error = current_state.get("error", {})
+        if workflow.get("goal_achieved"):
             print_success("Goal achieved!")
             break
-        elif current_state.get("error"):
-            print_error(f"Error: {current_state['error']}")
+        elif error.get("message"):
+            print_error(f"Error: {error['message']}")
             break
-        elif not current_state.get("continue_optimization", False):
+        elif not workflow.get("continue_optimization", False):
             print_info("Optimization complete.")
             break
 
         # Continue to next iteration
-        print_info(f"Iteration {current_state.get('iteration_count', 0)} complete.")
+        print_info(f"Iteration {workflow.get('iteration_count', 0)} complete.")
         print()
 
     return current_state
@@ -296,6 +345,29 @@ Examples:
         help="OpenAI-compatible API base URL (or set OPENAI_BASE_URL env var)",
     )
 
+    parser.add_argument(
+        "--backend",
+        "-b",
+        type=str,
+        default="mcp",
+        choices=["mcp", "mock"],
+        help="Backend type: 'mcp' for MCP server (default), 'mock' for in-memory testing",
+    )
+
+    parser.add_argument(
+        "--trace",
+        "-t",
+        action="store_true",
+        help="Enable LangSmith tracing for observability (requires LANGCHAIN_API_KEY)",
+    )
+
+    parser.add_argument(
+        "--trace-project",
+        type=str,
+        default="accops-agent",
+        help="LangSmith project name for traces (default: accops-agent)",
+    )
+
     args = parser.parse_args()
 
     # Setup logging
@@ -304,14 +376,27 @@ Examples:
     # Print banner
     print_banner()
 
-    # Create MCP backend (config is loaded via MCP server)
+    # Setup LangSmith tracing if requested
+    if args.trace:
+        setup_langsmith_tracing(args.trace_project)
+
+    # Create backend based on selection
     try:
-        print_info(f"Initializing MCP backend with config: {args.config}...")
-        backend = MCPBackend(config_path=args.config)
-        if not backend.initialize():
-            print_error("Failed to initialize MCP backend (see error above for details)")
-            sys.exit(1)
-        print_success(f"Connected to MCP server: {backend.config.name}")
+        if args.backend == "mock":
+            print_info(f"Initializing mock backend with config: {args.config}...")
+            config = load_accelerator_config(args.config)
+            backend = MockBackend(config=config)
+            if not backend.initialize():
+                print_error("Failed to initialize mock backend")
+                sys.exit(1)
+            print_success(f"Mock backend initialized: {backend.config.name}")
+        else:
+            print_info(f"Initializing MCP backend with config: {args.config}...")
+            backend = MCPBackend(config_path=args.config)
+            if not backend.initialize():
+                print_error("Failed to initialize MCP backend (see error above for details)")
+                sys.exit(1)
+            print_success(f"Connected to MCP server: {backend.config.name}")
         print_info(f"  Knobs: {len(backend.config.knobs)}")
         print_info(f"  Diagnostics: {len(backend.config.diagnostics)}")
     except Exception as e:
@@ -359,8 +444,10 @@ Examples:
         sys.exit(1)
 
     # Create initial state
-    initial_state = create_initial_state(user_intent=user_intent)
-    initial_state["max_iterations"] = args.max_iterations
+    initial_state = create_initial_state(
+        user_intent=user_intent,
+        max_iterations=args.max_iterations,
+    )
 
     # Create graph config
     graph_config = create_agent_config(
@@ -380,7 +467,8 @@ Examples:
         print()
         print(format_state_summary(final_state))
 
-        if final_state.get("goal_achieved"):
+        final_workflow = final_state.get("workflow", {})
+        if final_workflow.get("goal_achieved"):
             print_success("Optimization completed successfully!")
         else:
             print_info("Optimization workflow ended.")
