@@ -1,0 +1,17 @@
+# Parameter range limits (per device or wildcard)
+# Values outside [min, max] are rejected before any write.
+
+["LINAC:QUAD:*:CURRENT"]
+min = -50.0
+max = 50.0
+units = "A"
+
+["LINAC:RF:*:PHASE"]
+min = -180.0
+max = 180.0
+units = "deg"
+
+["RING:BPM:*:X"]
+min = -10.0
+max = 10.0
+units = "mm"

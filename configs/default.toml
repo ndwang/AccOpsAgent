@@ -1,0 +1,25 @@
+# Accelerator Agent — default configuration
+# Override per facility or environment.
+# LiteLLM: set API keys in env (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
+
+[llm]
+model = "anthropic/claude-sonnet-4-20250514"
+max_tokens = 8096
+# Named models for /provider switching
+default = "claude"
+[llm.models]
+claude = "anthropic/claude-sonnet-4-20250514"
+gpt4 = "openai/gpt-4o"
+
+[adapter]
+type = "simulator"
+
+agent_md = "AGENT.md"
+safety_limits = "configs/safety_limits.toml"
+
+[sandbox]
+scripts_dir = "scripts"
+work_dir = "logs/workspace"
+data_dirs = []
+timeout_seconds = 120
+max_memory_mb = 2048
