@@ -42,12 +42,14 @@ class Conversation:
             self._tool_call_count += len(tool_calls)
 
     def add_tool_results(self, results: list[dict]) -> None:
-        content = [
-            {
-                "type": "tool_result",
-                "tool_use_id": r["call_id"],
-                "content": json.dumps(r["result"]) if not isinstance(r["result"], str) else r["result"],
-            }
-            for r in results
-        ]
-        self._messages.append({"role": "user", "content": content})
+        for r in results:
+            content = (
+                json.dumps(r["result"])
+                if not isinstance(r["result"], str)
+                else r["result"]
+            )
+            self._messages.append({
+                "role": "tool",
+                "tool_call_id": r["call_id"],
+                "content": content,
+            })

@@ -32,9 +32,11 @@ SCAN  — Sweep a device across a range while reading others at each step.
 Compose these to express any procedure. Include rollback actions to restore
 original state after the plan completes or if it fails partway through."""
 
-    def __init__(self, approval_gate, plan_executor):
+    def __init__(self, approval_gate, plan_executor, audit_log=None, operator: str = "unknown"):
         self.approval = approval_gate
         self.executor = plan_executor
+        self.audit = audit_log
+        self.operator = operator
 
     def parameters_schema(self):
         return {
@@ -78,7 +80,20 @@ original state after the plan completes or if it fails partway through."""
     async def execute(self, params):
         plan = ActionPlan.from_dict(params)
         approved = await self.approval.review_plan(plan)
+
         if not approved:
+            self._audit(params, approved=False)
             return {"status": "rejected", "message": "Operator rejected the plan."}
+
         result = await self.executor.execute(plan)
+        self._audit(params, approved=True, result=result)
         return {"status": "completed", "result": result}
+
+    def _audit(self, plan_dict: dict, approved: bool, result: dict | None = None):
+        if self.audit:
+            self.audit.record(
+                plan=plan_dict,
+                approved=approved,
+                operator=self.operator,
+                result=result,
+            )

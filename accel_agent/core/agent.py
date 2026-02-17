@@ -1,5 +1,6 @@
 """Top-level orchestrator wiring: LLM, adapter, tools, ReAct loop."""
 
+import os
 from pathlib import Path
 
 from accel_agent.llm.router import LLMRouter
@@ -40,6 +41,7 @@ class OrchestratorAgent:
         limits_path = config.get("safety_limits", "configs/safety_limits.toml")
         self.validator = ParameterValidator(limits_path)
         self.audit = AuditLog()
+        self.operator = self._resolve_operator(config)
 
         self.plan_executor = PlanExecutor(self.adapter, self.validator)
         self.tools = ToolRegistry()
@@ -77,7 +79,10 @@ class OrchestratorAgent:
         self.tools.register(ReadLogTool(self.adapter))
         self.tools.register(LaunchDisplayTool())
         self.tools.register(
-            ProposePlanTool(self.approval_gate, self.plan_executor)
+            ProposePlanTool(
+                self.approval_gate, self.plan_executor,
+                audit_log=self.audit, operator=self.operator,
+            )
         )
         self.tools.register(ExecuteCodeTool(config.get("sandbox", {})))
         self.tools.register(RunExistingScriptTool(config.get("sandbox", {})))
@@ -90,6 +95,16 @@ class OrchestratorAgent:
         self.llm = self.llm_router.get(name)
         self.react_loop.llm = self.llm
         self.dispatcher.llm = self.llm
+
+    @staticmethod
+    def _resolve_operator(config: dict) -> str:
+        return (
+            config.get("operator")
+            or os.environ.get("ACCEL_AGENT_OPERATOR")
+            or os.environ.get("USER")
+            or os.environ.get("USERNAME")
+            or "unknown"
+        )
 
     def clear_conversation(self) -> None:
         self.conversation = Conversation()

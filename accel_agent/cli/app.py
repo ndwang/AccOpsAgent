@@ -47,7 +47,6 @@ class AgentCLI:
                 console.print(
                     "/help      — Show this message\n"
                     "/context   — Show loaded AGENT.md\n"
-                    "/history   — Show conversation summary\n"
                     "/provider  — Switch LLM model (e.g., /provider gpt4)\n"
                     "/clear     — Clear conversation\n"
                     "/quit      — Exit"
